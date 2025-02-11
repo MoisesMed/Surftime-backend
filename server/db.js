@@ -1,8 +1,8 @@
+// require('dotenv').config();
 const mongoose = require('mongoose');
 
-// Replace 'your_database_url' with your actual MongoDB connection string
-const dbURI = 'mongodb+srv://leo:swqhfumAbTIbNDJ2@surftimeapp.c261d.mongodb.net/?retryWrites=true&w=majority&appName=surftimeapp';
+const dbURI = process.env.MONGODB_URI;
 
 mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.log(err));
+  .then(() => console.log('Connected to MongoDB Atlas'))
+  .catch(err => console.log('Error connecting to MongoDB Atlas:', err));

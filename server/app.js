@@ -7,6 +7,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const registerRoute = require('./api/register');
+const loginRoute = require('./api/login');
+const validatePhoneNumberRoute = require('./api/validatePhoneNumber');
+
 // Create a new surf session
 app.post('/sessions', async (req, res) => {
   try {
@@ -38,7 +42,7 @@ app.get('/sessions/:id', async (req, res) => {
       return res.status(400).send({ message: 'Invalid session ID' });
     }
 
-    const session = await SurfSession.findById(sessionId).populate('participants').populate('location');
+    const session = await SurfSession.findById(sessionId);
 
     if (!session) {
       return res.status(404).send({ message: 'Surf session not found.' });
@@ -50,51 +54,48 @@ app.get('/sessions/:id', async (req, res) => {
   }
 });
 
-// Predefined surf session data
-const mockSurfSession = {
-  _id: "60d5f9f5f9f5f9f5f9f5f9f5",
-  date: "2025-02-01T10:00:00Z",
-  location: {
-    _id: "60d5f9f5f9f5f9f5f9f5f9f8",
-    name: "Bondi Beach",
-    address: "Bondi Beach, Sydney, Australia",
-    coordinates: {
-      latitude: -33.8908,
-      longitude: 151.2743
-    },
-    description: "A popular beach known for its great surf conditions."
-  },
-  participants: [
-    {
-      _id: "60d5f9f5f9f5f9f5f9f5f9f6",
-      username: "surfer123",
-      email: "surfer123@example.com",
-      fullName: "John Doe"
-    },
-    {
-      _id: "60d5f9f5f9f5f9f5f9f5f9f7",
-      username: "waveRider",
-      email: "waveRider@example.com",
-      fullName: "Jane Smith"
-    }
-  ],
-  notes: "Bring sunscreen and snacks."
-};
+// GET endpoint to save a mock surf session
+app.post('/session', async (req, res) => {
+  try {
+    // Create a new surf session instance
+    const newSession = new SurfSession(mockSurfSession);
 
-// GET endpoint to retrieve the mock surf session
-app.get('/session', async (req, res) => {
-  // Create a new surf session instance
-  const newSession = new SurfSession(mockSurfSession);
+    // Save the new session to the database
+    const result = await newSession.save();
 
-  // Save the new session to the database
-  await newSession.save();
-
-  res.status(200).send(mockSurfSession);
+    res.status(201).send(`Document inserted with _id: ${result._id}`);
+  } catch (error) {
+    res.status(500).send('Error inserting document');
+  }
 });
+
+app.use('/students', registerRoute);
+// app.use('/students', loginRoute);
+app.use('/students', validatePhoneNumberRoute);
+
 
 // Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// const PORT = process.env.PORT || 5005;
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+// });
 
+// Update
+// app.put('/documents/:id', async (req, res) => {
+//   try {
+//     const result = await Document.findByIdAndUpdate(req.params.id, req.body, { new: true });
+//     res.status(200).send(`Document updated: ${result}`);
+//   } catch (error) {
+//     res.status(500).send('Error updating document');
+//   }
+// });
+
+// Delete
+// app.delete('/documents/:id', async (req, res) => {
+//   try {
+//     const result = await Document.findByIdAndDelete(req.params.id);
+//     res.status(200).send(`Document deleted: ${result}`);
+//   } catch (error) {
+//     res.status(500).send('Error deleting document');
+//   }
+// });
