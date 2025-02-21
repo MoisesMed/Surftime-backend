@@ -9,6 +9,21 @@ const studentSchema = new mongoose.Schema({
     observations: { type: String },
     registeredSessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SurfSession' }],
     profileImageUrl: { type: String }, // URL to the student's profile image
+    password: { type: String, required: true }
+  });
+
+  studentSchema.pre('save', async function (next) {
+    if (!this.isModified('password')) {
+      return next();
+    }
+  
+    try {
+      const salt = await bcrypt.genSalt(10);
+      this.password = await bcrypt.hash(this.password, salt);
+      next();
+    } catch (error) {
+      next(error);
+    }
   });
 
   const StudentSchema = mongoose.model('studentSchema', studentSchema);
