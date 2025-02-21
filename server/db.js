@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 let isConnected;
 
 // Static MongoDB URI for development or testing
-const staticMongoDBURI = 'mongodb+srv://leo:swqhfumAbTIbNDJ2@surftimeapp.c261d.mongodb.net/?retryWrites=true&w=majority&appName=surftimeapp';
-
+const staticMongoDBURI = 'mongodb+srv://leo:swqhfumAbTIbNDJ2@surftimeapp.c261d.mongodb.net/surftimeapp_dosanjossurfschool?retryWrites=true&w=majority&appName=surftimeapp
+';
 async function connectToDatabase() {
   if (isConnected) {
     console.log('Using existing database connection');
