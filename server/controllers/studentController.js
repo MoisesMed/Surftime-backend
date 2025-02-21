@@ -4,6 +4,9 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+console.log(`This is my jwt in controller: ${process.env.JWT_SECRET}`);
+
+
 exports.loginStudent = async (req, res) => {
   try {
     const { email, password } = req.body;
