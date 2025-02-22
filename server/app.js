@@ -11,10 +11,10 @@ const context = require('./middleware/context');
 const app = express();
 app.use(express.json());
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(validateHttps);
-  app.use(context)
-}
+// if (process.env.NODE_ENV === 'production') {
+//   app.use(validateHttps);
+//   app.use(context)
+// }
 
 // Connect to MongoDB
 connectToDatabase();
