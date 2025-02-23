@@ -4,7 +4,8 @@ const express = require('express');
 const connectToDatabase = require('./db');
 const userRoutes = require('./routes/userRoutes');
 const validateRoutes = require('./routes/validatePhoneNumberRoutes');
-const validateHttps = require('./middleware/validateHttps'); 
+const schoolRoutes = require('./routes/schoolRoutes');
+const validateHttps = require('./middleware/validateHttps');
 const context = require('./middleware/context');
 
 const app = express();
@@ -21,6 +22,7 @@ connectToDatabase();
 // Use routes
 app.use('/api/users', userRoutes);
 app.use('/api/validate', validateRoutes);
+app.use('/api/school', schoolRoutes);
 
 const PORT = process.env.PORT || 3005;
 

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const School = require('../models/School');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
@@ -30,6 +31,15 @@ exports.registerUser = async (req, res) => {
   try {
     const newUser = new User(req.body);
     await newUser.save();
+
+    //TODO: this should not be hardcoded
+    const school = await School.findOne({ name: 'Dos Anjos Surf School' });
+
+    if (school) {
+      // Add the user to the surf school
+      await School.findByIdAndUpdate(school._id, { $push: { users: newUser._id } });
+    }
+    
     res.status(201).json({ message: 'user registered successfully', user: newUser });
   } catch (error) {
     res.status(500).json({ message: 'Error registering user', error: error.message });

@@ -8,6 +8,6 @@ const settingsSchema = new mongoose.Schema({
   // Add more customization fields as needed
 });
 
-const SettingsSchema = mongoose.model('settingsSchema', settingsSchema);
+const SettingsSchema = mongoose.model('Settings', settingsSchema);
 
 module.exports = SettingsSchema;
