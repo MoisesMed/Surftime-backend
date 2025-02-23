@@ -1,4 +1,4 @@
-const Student = require('../models/Student');
+const User = require('../models/User');
 
 exports.validatePhoneNumber = async (req, res) => {
   try {
@@ -8,9 +8,9 @@ exports.validatePhoneNumber = async (req, res) => {
       return res.status(400).json({ message: 'Phone number is required' });
     }
 
-    const student = await Student.findOne({ phoneNumber });
+    const user = await User.findOne({ phoneNumber });
 
-    if (student) {
+    if (user) {
       return res.status(200).json({ exists: true, message: 'Phone number already exists' });
     } else {
       return res.status(200).json({ exists: false, message: 'Phone number is available' });

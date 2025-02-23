@@ -13,10 +13,7 @@ async function connectToDatabase() {
   try {
     // Use the environment variable if available, otherwise use the static URI
     const mongoDBURI = process.env.MONGODB_URI || staticMongoDBURI;
-    await mongoose.connect(mongoDBURI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(mongoDBURI);
     isConnected = mongoose.connection.readyState;
     console.log('Connected to MongoDB Atlas');
   } catch (error) {

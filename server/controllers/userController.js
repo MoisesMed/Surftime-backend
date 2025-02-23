@@ -1,0 +1,46 @@
+const User = require('../models/User');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+exports.loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Cannot find user with this email' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: 'Invalid password' });
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
+    res.status(200).json({ message: 'Login successful', token });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error logging in', error: error.message });
+  }
+};
+
+exports.registerUser = async (req, res) => {
+  try {
+    const newUser = new User(req.body);
+    await newUser.save();
+    res.status(201).json({ message: 'user registered successfully', user: newUser });
+  } catch (error) {
+    res.status(500).json({ message: 'Error registering user', error: error.message });
+  }
+};
+
+exports.getUsers = async (req, res) => {
+  try {
+    const users = await User.find();
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching users', error: error.message });
+  }
+};
