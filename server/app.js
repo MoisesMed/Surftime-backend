@@ -6,8 +6,6 @@ const userRoutes = require('./routes/userRoutes');
 const validateRoutes = require('./routes/validatePhoneNumberRoutes');
 const schoolRoutes = require('./routes/schoolRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
-const swaggerUi = require('swagger-ui-express');
-const swaggerDocs = require('./swaggerConfiguration');
 const validateHttps = require('./middleware/validateHttps');
 const context = require('./middleware/context');
 
@@ -21,9 +19,6 @@ app.use(express.json());
 
 // Connect to MongoDB
 connectToDatabase();
-
-//Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Use routes
 app.use('/api/users', userRoutes);
