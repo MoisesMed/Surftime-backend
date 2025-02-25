@@ -6,10 +6,10 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   phoneNumber: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['student', 'instructor'], required: true },
+  role: { type: String, enum: ['student', 'instructor'] },
   isAdmin: { type: Boolean, default: false },
   cpf: { type: String, unique: true, sparse: true },
-  birthday: { type: Date },
+  birthday: { type: Date, required: true },
   observations: { type: String },
   profileImageUrl: { type: String }
 });
