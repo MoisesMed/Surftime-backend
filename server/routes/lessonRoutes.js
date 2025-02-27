@@ -5,25 +5,25 @@ const requireAdmin = require('../middleware/requireAdmin');
 
 const router = express.Router();
 
+//Get school lessons
+router.get('/', requireAuth, getSchoolLessons);
+
 // Create a lesson (admin-only route)
-router.post('/create', requireAdmin, requireAuth, createLesson);
+router.post('/create', requireAuth, requireAdmin, createLesson);
 
 // Assign an instructor to a lesson (admin-only route)
-router.post('/:lessonId/assign-instructor', requireAdmin, requireAuth, assignInstructor);
+router.post('/:lessonId/assign-instructor', requireAuth, requireAdmin, assignInstructor);
 
 // Book a lesson
 router.post('/:lessonId/book', requireAuth, bookLesson);
 
 // Get all lessons for a student
-router.get('/student/:studentId', requireAuth, getStudentLessons);
+router.get('/student', requireAuth, getStudentLessons);
 
 // Cancel booking
 router.get('/:lessonId/cancel-booking', requireAuth, cancelBooking);
 
 // Get all lessons for an instructor
-router.get('/instructor/:instructorId', requireAuth, getAssignedLessonsByInstructor);
-
-//Get school lessons
-router.get('/school/:schoolId', requireAuth, getSchoolLessons);
+router.get('/instructor', requireAuth, getAssignedLessonsByInstructor);
 
 module.exports = router;

@@ -1,22 +1,26 @@
 const Lesson = require('../models/Lesson');
 const User = require('../models/User');
+const getSchoolObject = require('../utils/getSchoolObject');
 
 exports.createLesson = async (req, res) => {
   try {
-    const { date, timeSlot, location, studentLimit, schoolId } = req.body;
+    const { date, timeSlot, location, studentLimit } = req.body;
 
-    if (!date || !timeSlot || !location || !studentLimit || !surfSchoolId) {
+    const school = await getSchoolObject();
+    const schoolId = school._id;
+
+    if (!date || !timeSlot || !location || !studentLimit || !schoolId) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
     const newLesson = new Lesson({
-      date,
+      date: new Date(date),
       timeSlot,
       location,
       studentLimit,
-      schoolId,
+      school: schoolId,
     });
-
+    console.log(newLesson);
     await newLesson.save();
     res.status(201).json({ message: 'Lesson created successfully', lesson: newLesson });
   } catch (error) {
@@ -29,12 +33,18 @@ exports.assignInstructor = async (req, res) => {
     const { lessonId } = req.params;
     const { instructorId } = req.body;
 
-    if (!instructorId) {
-      return res.status(400).json({ message: 'Instructor ID is required' });
+    const lessonObj = await Lesson.findById(lessonId);
+    if (!lessonObj) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    const instructorObj = await User.findById(instructorId);
+    if (!instructorObj || instructorObj.role !== 'instructor') {
+      return res.status(400).json({ message: 'Invalid instructor ID' });
     }
 
     // Assign the instructor to the lesson
-    const lesson = await Lesson.findByIdAndUpdate(lessonId, { instructor: instructorId }, { new: true });
+    const lesson = await Lesson.findByIdAndUpdate(lessonObj, { instructors: instructorObj }, { new: true });
 
     res.status(200).json({ message: 'Instructor assigned successfully', lesson });
   } catch (error) {
@@ -96,7 +106,7 @@ exports.cancelBooking = async (req, res) => {
 
 exports.getStudentLessons = async (req, res) => {
   try {
-    const { studentId } = req.params;
+    const studentId = req.user.id; //authenticated user 
 
     const lessons = await Lesson.find({ students: studentId }).populate('students');
 
@@ -108,7 +118,11 @@ exports.getStudentLessons = async (req, res) => {
 
 exports.getAssignedLessonsByInstructor = async (req, res) => {
   try {
-    const { instructorId } = req.params;
+    const instructorId = req.user.id; //authenticated user 
+
+    if (req.user.role !== 'instructor') {
+      return res.status(400).json({ message: 'Invalid instructor' });
+    }
 
     const lessons = await Lesson.find({ instructors: instructorId }).populate('instructors');
 
@@ -120,9 +134,10 @@ exports.getAssignedLessonsByInstructor = async (req, res) => {
 
 exports.getSchoolLessons = async (req, res) => {
   try {
-    const { schoolId } = req.params;
-
-    const lessons = await Lesson.find({ school: schoolId }).populate('school');
+    const school = await getSchoolObject();
+    const schoolId = school._id;
+    
+    const lessons = await Lesson.find({ school: schoolId });
 
     res.status(200).json(lessons);
   } catch (error) {

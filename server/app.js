@@ -8,13 +8,23 @@ const schoolRoutes = require('./routes/schoolRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
 const validateHttps = require('./middleware/validateHttps');
 const context = require('./middleware/context');
+const helmet = require('helmet')
 
 const app = express();
 app.use(express.json());
+app.use(helmet());
+// app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"],
+  }
+}));
+app.disable('x-powered-by');
 
 // if (process.env.NODE_ENV === 'production') {
 //   app.use(validateHttps);
-//   app.use(context)
+//   app.use(context);
 // }
 
 // Connect to MongoDB
@@ -24,7 +34,7 @@ connectToDatabase();
 app.use('/api/users', userRoutes);
 app.use('/api/validate', validateRoutes);
 app.use('/api/school', schoolRoutes);
-app.use('/api/lesson', lessonRoutes);
+app.use('/api/lessons', lessonRoutes);
 app.use('/', (req, res)=> {
   res.send('Hello, welcome to the surftime API!');
 });
