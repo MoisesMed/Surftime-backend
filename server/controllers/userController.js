@@ -2,6 +2,9 @@ const User = require('../models/User');
 const School = require('../models/School');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { client, twilioPhoneNumber } = require('../config/twilioConfig');
+
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -20,8 +23,14 @@ exports.loginUser = async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
-    res.status(200).json({ message: 'Login successful', token });
 
+    const { password: _, ...userWithoutPassword } = user.toObject();
+
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: userWithoutPassword,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error logging in', error: error.message });
   }
@@ -71,6 +80,71 @@ exports.validateEmail = async (req, res) => {
     } else {
       return res.status(200).json({ isAvailable: true });
     }
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+exports.requestPasswordReset = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+
+    // Validate required fields
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'phoneNumber is required' });
+    }
+
+    // find user with phone number
+    const user = await User.findOne({ phoneNumber });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // generate a reset token
+    const verificationCode = crypto.randomInt(100000, 999999).toString();
+    const resetTokenExpires = Date.now() + 3600000; // 1 hour
+
+    // save the reset token and expiration date to the user
+    user.resetToken = verificationCode;
+    user.resetTokenExpiration = resetTokenExpires;
+    await user.save();
+
+    // Send SMS with Twilio
+    await client.messages.create({
+      body: `Your password reset code is: ${verificationCode}`,
+      from: twilioPhoneNumber,
+      to: user.phoneNumber,
+    });
+
+    res.status(200).json({ message: 'Password reset code sent via SMS' });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { phoneNumber, verificationCode, password } = req.body;
+
+    // find the user with the reset token and check if it has expired
+    const user = await User.findOne({
+      phoneNumber,
+      resetPasswordToken: verificationCode,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired verification code.' });
+    }
+
+    // hash the new password and save it to the user
+    user.password = await bcrypt.hash(password, 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+    res.status(200).json({ message: 'Password has been reset' });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }

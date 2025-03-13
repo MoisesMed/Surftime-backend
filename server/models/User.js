@@ -11,7 +11,9 @@ const userSchema = new mongoose.Schema({
   cpf: { type: String, unique: true, sparse: true },
   birthday: { type: Date, required: true },
   observations: { type: String },
-  profileImageUrl: { type: String }
+  profileImageUrl: { type: String },
+  resetToken: { type: String },
+  resetTokenExpiration: { type: Date },
 });
 
 userSchema.pre('save', async function (next) {
