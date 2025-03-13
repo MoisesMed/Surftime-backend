@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const cors = require('cors');
 const connectToDatabase = require('./db');
 const userRoutes = require('./routes/userRoutes');
 const validateRoutes = require('./routes/validatePhoneNumberRoutes');
@@ -26,6 +27,12 @@ app.disable('x-powered-by');
 //   app.use(validateHttps);
 //   app.use(context);
 // }
+
+app.use(cors({
+  origin: 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed HTTP methods
+  credentials: true, // Allow credentials (e.g., cookies, authorization headers)
+}));
 
 // Connect to MongoDB
 connectToDatabase();
