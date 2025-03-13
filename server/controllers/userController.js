@@ -7,11 +7,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { phoneNumber, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ phoneNumber });
     if (!user) {
-      return res.status(400).json({ message: 'Cannot find user with this email' });
+      return res.status(400).json({ message: 'Cannot find user with this phoneNumber' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
