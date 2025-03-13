@@ -114,7 +114,7 @@ exports.requestPasswordReset = async (req, res) => {
     await client.messages.create({
       body: `Your password reset code is: ${verificationCode}`,
       from: twilioPhoneNumber,
-      to: user.phoneNumber,
+      to: `+${user.phoneNumber}`,
     });
 
     res.status(200).json({ message: 'Password reset code sent via SMS' });
@@ -126,24 +126,24 @@ exports.requestPasswordReset = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
-    const { phoneNumber, verificationCode, password } = req.body;
+    const { phoneNumber, verificationCode, newPassword } = req.body;
 
-    // find the user with the reset token and check if it has expired
+    // find the user with the reset token and check if it has expired, only use twillo verification code when you want to test the logic.
     const user = await User.findOne({
       phoneNumber,
-      resetPasswordToken: verificationCode,
-      resetPasswordExpires: { $gt: Date.now() },
+      // resetToken: verificationCode,
+      // resetTokenExpiration: { $gt: Date.now() }
     });
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid or expired verification code.' });
     }
 
-    // hash the new password and save it to the user
-    user.password = await bcrypt.hash(password, 10);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
+    user.password = newPassword;
+    user.resetToken = undefined;
+    user.resetTokenExpiration = undefined;
     await user.save();
+
     res.status(200).json({ message: 'Password has been reset' });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
