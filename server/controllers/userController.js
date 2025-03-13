@@ -54,3 +54,24 @@ exports.getUsers = async (req, res) => {
     res.status(500).json({ message: 'Error fetching users', error: error.message });
   }
 };
+
+exports.validateEmail = async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    // Validate required fields
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Check if the email is already in use
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(200).json({ isAvailable: false, message: 'Email is already in use' });
+    } else {
+      return res.status(200).json({ isAvailable: true });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
