@@ -28,8 +28,21 @@ app.disable('x-powered-by');
 //   app.use(context);
 // }
 
+const allowedOrigins = [
+  'http://localhost:5173', // Development origin
+  'https://surftime-frontend.onrender.com', // Production origin
+];
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed HTTP methods
   credentials: true, // Allow credentials (e.g., cookies, authorization headers)
 }));
