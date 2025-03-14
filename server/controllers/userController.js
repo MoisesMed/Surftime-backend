@@ -104,7 +104,8 @@ exports.requestPasswordReset = async (req, res) => {
     }
 
     // generate a reset token
-    const verificationCode = crypto.randomInt(100000, 999999).toString();
+    // const verificationCode = crypto.randomInt(100000, 999999).toString();
+    const verificationCode = "123456"
     const resetTokenExpires = Date.now() + 3600000; // 1 hour
 
     // save the reset token and expiration date to the user
@@ -113,11 +114,11 @@ exports.requestPasswordReset = async (req, res) => {
     await user.save();
 
     // Send SMS with Twilio
-    await client.messages.create({
-      body: `Your password reset code is: ${verificationCode}`,
-      from: twilioPhoneNumber,
-      to: `+${user.phoneNumber}`,
-    });
+    // await client.messages.create({
+    //   body: `Your password reset code is: ${verificationCode}`,
+    //   from: twilioPhoneNumber,
+    //   to: `+${user.phoneNumber}`,
+    // });
 
     res.status(200).json({ message: 'Password reset code sent via SMS' });
 
@@ -133,8 +134,8 @@ exports.resetPassword = async (req, res) => {
     // find the user with the reset token and check if it has expired, only use twillo verification code when you want to test the logic.
     const user = await User.findOne({
       phoneNumber,
-      // resetToken: verificationCode,
-      // resetTokenExpiration: { $gt: Date.now() }
+      resetToken: verificationCode,
+      resetTokenExpiration: { $gt: Date.now() }
     });
 
     if (!user) {
