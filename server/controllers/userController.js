@@ -49,7 +49,9 @@ exports.registerUser = async (req, res) => {
       await School.findByIdAndUpdate(school._id, { $push: { users: newUser._id } });
     }
     
-    res.status(201).json({ message: 'user registered successfully', user: newUser });
+    const token = jwt.sign({ id: newUser._id, role: newUser.role, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
+
+    res.status(201).json({ message: 'user registered successfully', token, user: newUser });
   } catch (error) {
     res.status(500).json({ message: 'Error registering user', error: error.message });
   }
