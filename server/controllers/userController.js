@@ -87,7 +87,7 @@ exports.getUsers = async (req, res) => {
     const users = await User.find();
     res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching users', error: error.message });
+    res.status(500).json({ message: messages.pt.fetchUsersError });
   }
 };
 
@@ -145,10 +145,10 @@ exports.requestPasswordReset = async (req, res) => {
     //   to: `+${user.phoneNumber}`,
     // });
 
-    res.status(200).json({ message: 'Password reset code sent via SMS' });
+    res.status(200).json({ message: messages.pt.passwordResetCode });
 
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: messages.pt.internalServerError });
   }
 };
 
@@ -164,7 +164,7 @@ exports.resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired verification code.' });
+      return res.status(400).json({ message: messages.pt.verificationCodeInvalid });
     }
 
     user.password = newPassword;
@@ -172,8 +172,8 @@ exports.resetPassword = async (req, res) => {
     user.resetTokenExpiration = undefined;
     await user.save();
 
-    res.status(200).json({ message: 'Password has been reset' });
+    res.status(200).json({ message: messages.pt.passwordResetSuccess });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: messages.pt.internalServerError });
   }
 };
