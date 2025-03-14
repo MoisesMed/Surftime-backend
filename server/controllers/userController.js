@@ -14,12 +14,12 @@ exports.loginUser = async (req, res) => {
 
     const user = await User.findOne({ phoneNumber });
     if (!user) {
-      return res.status(400).json({ message: 'Cannot find user with this phoneNumber' });
+      return res.status(400).json({ message: messages.pt.phoneNumberNotFound });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ message: 'Invalid password' });
+      return res.status(400).json({ message: messages.pt.invalidPassword });
     }
 
     const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
@@ -27,12 +27,12 @@ exports.loginUser = async (req, res) => {
     const { password: _, ...userWithoutPassword } = user.toObject();
 
     res.status(200).json({
-      message: 'Login successful',
+      message: messages.pt.loginSuccess,
       token,
       user: userWithoutPassword,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error logging in' });
+    res.status(500).json({ message: messages.pt.loginError });
   }
 };
 
@@ -42,7 +42,7 @@ exports.registerUser = async (req, res) => {
 
     // Validate required fields
     if (!fullName || !email || !phoneNumber || !password || !cpf || !birthday) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: messages.pt.allFieldsRequired });
     }
 
     // Check if a user with the same email or phone number already exists
@@ -97,18 +97,18 @@ exports.validateEmail = async (req, res) => {
 
     // Validate required fields
     if (!email) {
-      return res.status(400).json({ message: 'Email is required' });
+      return res.status(400).json({ message: messages.pt.emailRequired });
     }
 
     // Check if the email is already in use
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(200).json({ isAvailable: false, message: 'Email is already in use' });
+      return res.status(200).json({ isAvailable: false, message: messages.pt.emailInUse });
     } else {
       return res.status(200).json({ isAvailable: true });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: messages.pt.internalServerError });
   }
 };
 
@@ -118,14 +118,14 @@ exports.requestPasswordReset = async (req, res) => {
 
     // Validate required fields
     if (!phoneNumber) {
-      return res.status(400).json({ message: 'phoneNumber is required' });
+      return res.status(400).json({ message: messages.pt.phoneNumberRequired });
     }
 
     // find user with phone number
     const user = await User.findOne({ phoneNumber });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: messages.pt.userNotFound });
     }
 
     // generate a reset token

@@ -13,18 +13,24 @@ const messages = {
       internalServerError: 'Internal server error',
     },
     pt: {
-      userNotFound: 'Usuário não encontrado',
+      userNotFound: 'Usuário não encontrado.',
       userExists: 'O usuário já está registrado.',
       registrationSuccess: 'Usuário registrado com sucesso.',
       registrationError: 'Erro ao registrar o usuário.',
+      emailRequired: 'O email é obrigatório.',
+      emailInUse: 'O email já está sendo utilizado.',
       loginSuccess: 'Login bem-sucedido',
-      invalidPassword: 'Senha inválida',
+      loginError: 'Erro ao efetuar o login.', 
+      invalidPassword: 'Senha inválida.',
+      phoneNumberNotFound: 'Número de telefone não cadastrado.',
+      phoneNumberRequired: 'Número de telefone obrigatório.',
       passwordResetSuccess: 'Senha redefinida com sucesso',
       invalidToken: 'Código de verificação inválido ou expirado',
       lessonCreated: 'Aula criada com sucesso',
       instructorAssigned: 'Instrutor atribuído com sucesso',
       lessonBooked: 'Aula reservada com sucesso',
       internalServerError: 'Erro interno do servidor',
+      allFieldsRequired: 'Todos os campos são necessários.'
     },
   };
   
