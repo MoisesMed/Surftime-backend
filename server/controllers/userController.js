@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { client, twilioPhoneNumber } = require('../config/twilioConfig');
-
+const messages = require('../resources/messages');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -32,13 +32,38 @@ exports.loginUser = async (req, res) => {
       user: userWithoutPassword,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error logging in', error: error.message });
+    res.status(500).json({ message: 'Error logging in' });
   }
 };
 
 exports.registerUser = async (req, res) => {
   try {
-    const newUser = new User(req.body);
+    const { fullName, email, cpf, birthday, phoneNumber, password } = req.body;
+
+    // Validate required fields
+    if (!fullName || !email || !phoneNumber || !password || !cpf || !birthday) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Check if a user with the same email or phone number already exists
+    const existingUser = await User.findOne({
+      $or: [{ email }, { cpf }, { phoneNumber }],
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: messages.pt.userExists });
+    }
+
+    // Create a new user
+    const newUser = new User({
+      fullName,
+      email,
+      phoneNumber,
+      cpf,
+      birthday,
+      password
+    });
+
     await newUser.save();
 
     //TODO: this should not be hardcoded
@@ -51,9 +76,9 @@ exports.registerUser = async (req, res) => {
     
     const token = jwt.sign({ id: newUser._id, role: newUser.role, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
 
-    res.status(201).json({ message: 'user registered successfully', token, user: newUser });
+    res.status(201).json({ message: messages.pt.registrationSuccess, token, user: newUser });
   } catch (error) {
-    res.status(500).json({ message: 'Error registering user', error: error.message });
+    res.status(500).json({ message: messages.pt.registrationError });
   }
 };
 
