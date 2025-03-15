@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const mongoose = require('mongoose');
+const StudentProfile = require('../models/studentProfile');
 const School = require('../models/School');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -32,11 +34,14 @@ exports.loginUser = async (req, res) => {
       user: userWithoutPassword,
     });
   } catch (error) {
-    res.status(500).json({ message: messages.pt.loginError });
+    res.status(500).json({ message: messages.pt.loginError,  error: error.message });
   }
 };
 
 exports.registerUser = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { fullName, email, cpf, birthday, phoneNumber, password } = req.body;
 
@@ -64,21 +69,32 @@ exports.registerUser = async (req, res) => {
       password
     });
 
-    await newUser.save();
+    await newUser.save({ session });
 
-    //TODO: this should not be hardcoded
-    const school = await School.findOne({ name: 'Dos Anjos Surf School' });
-
-    if (school) {
-      // Add the user to the surf school
-      await School.findByIdAndUpdate(school._id, { $push: { users: newUser._id } });
+    // if the user is a student, save StudentProfile
+    if (newUser.role === 'student') {
+      const studentProfile = new StudentProfile({ user: newUser._id });
+      await studentProfile.save({ session });
     }
+
+    // Find the school and add the user to it
+    const school = await School.findOne({ name: 'Dos Anjos Surf School' }).session(session);
+    if (school) {
+      await School.findByIdAndUpdate(school._id, { $push: { users: newUser._id } }, { session });
+    }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
     
     const token = jwt.sign({ id: newUser._id, role: newUser.role, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
 
     res.status(201).json({ message: messages.pt.registrationSuccess, token, user: newUser });
   } catch (error) {
-    res.status(500).json({ message: messages.pt.registrationError });
+    // Abort the transaction in case of error
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ message: messages.pt.registrationError, error: error.message });
   }
 };
 
@@ -87,7 +103,7 @@ exports.getUsers = async (req, res) => {
     const users = await User.find();
     res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ message: messages.pt.fetchUsersError });
+    res.status(500).json({ message: messages.pt.fetchUsersError,  error: error.message });
   }
 };
 
@@ -97,7 +113,7 @@ exports.validateEmail = async (req, res) => {
 
     // Validate required fields
     if (!email) {
-      return res.status(400).json({ message: messages.pt.emailRequired });
+      return res.status(400).json({ message: messages.pt.emailRequired,  error: error.message });
     }
 
     // Check if the email is already in use
@@ -108,7 +124,7 @@ exports.validateEmail = async (req, res) => {
       return res.status(200).json({ isAvailable: true });
     }
   } catch (error) {
-    res.status(500).json({ message: messages.pt.internalServerError });
+    res.status(500).json({ message: messages.pt.internalServerError,  error: error.message });
   }
 };
 
@@ -118,14 +134,14 @@ exports.requestPasswordReset = async (req, res) => {
 
     // Validate required fields
     if (!phoneNumber) {
-      return res.status(400).json({ message: messages.pt.phoneNumberRequired });
+      return res.status(400).json({ message: messages.pt.phoneNumberRequired,  error: error.message });
     }
 
     // find user with phone number
     const user = await User.findOne({ phoneNumber });
 
     if (!user) {
-      return res.status(404).json({ message: messages.pt.userNotFound });
+      return res.status(404).json({ message: messages.pt.userNotFound,  error: error.message });
     }
 
     // generate a reset token
@@ -148,7 +164,7 @@ exports.requestPasswordReset = async (req, res) => {
     res.status(200).json({ message: messages.pt.passwordResetCode });
 
   } catch (error) {
-    res.status(500).json({ message: messages.pt.internalServerError });
+    res.status(500).json({ message: messages.pt.internalServerError,  error: error.message });
   }
 };
 
@@ -164,7 +180,7 @@ exports.resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ message: messages.pt.verificationCodeInvalid });
+      return res.status(400).json({ message: messages.pt.verificationCodeInvalid,  error: error.message });
     }
 
     user.password = newPassword;
@@ -174,6 +190,6 @@ exports.resetPassword = async (req, res) => {
 
     res.status(200).json({ message: messages.pt.passwordResetSuccess });
   } catch (error) {
-    res.status(500).json({ message: messages.pt.internalServerError });
+    res.status(500).json({ message: messages.pt.internalServerError,  error: error.message });
   }
 };
