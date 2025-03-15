@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
   profileImageUrl: { type: String },
   resetToken: { type: String },
   resetTokenExpiration: { type: Date },
+  studentProfile: { type: mongoose.Schema.Types.ObjectId, ref: 'StudentProfile' }, // Reference to StudentProfile
 });
 
 userSchema.pre('save', async function (next) {

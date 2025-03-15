@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const lessonSchema = new mongoose.Schema({
-  date: { type: Date, required: true },
+  date: { type: Date, required: true, index: true },
   timeSlot: {
     start: { type: String, required: true },
     end: { type: String, required: true },

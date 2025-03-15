@@ -1,5 +1,5 @@
 const express = require('express');
-const { getStudentLessons, getAssignedLessonsByInstructor, createLesson, assignInstructor, bookLesson, cancelBooking, getSchoolLessons } = require('../controllers/lessonController');
+const { getStudentLessons, getAssignedLessonsByInstructor, createLesson, assignInstructor, bookLesson, cancelBooking, getSchoolLessons, getLessonsByDate, createLessonsForDay } = require('../controllers/lessonController');
 const requireAuth = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -7,6 +7,12 @@ const router = express.Router();
 
 //Get school lessons
 router.get('/', requireAuth, getSchoolLessons);
+
+//Get lessons by date
+router.get('/:date', requireAuth, getLessonsByDate);
+
+// Create all lessons for a specific day (admin-only route)
+router.post('/create-by-date', requireAuth, requireAdmin, createLessonsForDay);
 
 // Create a lesson (admin-only route)
 router.post('/create', requireAuth, requireAdmin, createLesson);

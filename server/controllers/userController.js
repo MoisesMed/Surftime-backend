@@ -75,6 +75,10 @@ exports.registerUser = async (req, res) => {
     if (newUser.role === 'student') {
       const studentProfile = new StudentProfile({ user: newUser._id });
       await studentProfile.save({ session });
+
+      // Update the user with the studentProfile reference
+      newUser.studentProfile = studentProfile._id;
+      await newUser.save({ session });
     }
 
     // Find the school and add the user to it
@@ -100,7 +104,7 @@ exports.registerUser = async (req, res) => {
 
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find();
+    const users = await User.find().populate('studentProfile');
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ message: messages.pt.fetchUsersError,  error: error.message });

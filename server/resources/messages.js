@@ -31,9 +31,13 @@ const messages = {
       invalidToken: 'Código de verificação inválido ou expirado',
       lessonCreated: 'Aula criada com sucesso',
       instructorAssigned: 'Instrutor atribuído com sucesso',
-      lessonBooked: 'Aula reservada com sucesso',
+      lessonBooked: 'Aula reservada com sucesso.',
+      lessonAlreadyBooked: 'Aula já está reservada.',
+      lessonFull: 'Aula já está cheia.', 
+      lessonCannotBook: 'Você não tem mais aulas disponíveis.',
       internalServerError: 'Erro interno do servidor',
-      allFieldsRequired: 'Todos os campos são necessários.'
+      allFieldsRequired: 'Todos os campos são necessários.',
+      lessonNotFound: 'Aula não encontrada.'
     },
   };
   
