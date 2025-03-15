@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const mongoose = require('mongoose');
-const StudentProfile = require('../models/studentProfile');
+const StudentProfile = require('../models/StudentProfile');
 const School = require('../models/School');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
