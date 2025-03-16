@@ -35,6 +35,8 @@ const messages = {
       lessonAlreadyBooked: 'Aula já está reservada.',
       lessonFull: 'Aula já está cheia.', 
       lessonCannotBook: 'Você não tem mais aulas disponíveis.',
+      lessonNotFound: 'Aula não encontrada',
+      lessonCannotCancel: 'Você não pode cancelar a aula com menos de 12 horas de antecedência.',
       internalServerError: 'Erro interno do servidor',
       allFieldsRequired: 'Todos os campos são necessários.',
       lessonNotFound: 'Aula não encontrada.'

@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
-const StudentProfile = require('../models/StudentProfile');
 const Lesson = require('../models/Lesson');
 const User = require('../models/User');
 const getSchoolObject = require('../utils/getSchoolObject');
 const messages = require('../resources/messages');
+const moment = require('moment-timezone');
 
 // Get all lessons by date
 exports.getLessonsByDate = async (req, res) => {
@@ -14,96 +14,28 @@ exports.getLessonsByDate = async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Convert the date string to a Date object and set the time to 00:00:00
-    const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
+    const school = await getSchoolObject();
+    const schoolId = school._id;
 
-    // Set the end date to the next day at 00:00:00
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 1);
+    // Validate required fields
+    if (!date  || !schoolId) {
+      return res.status(400).json({ message: messages.pt.allFieldsRequired });
+    }
 
-    // Find lessons within the specified date range
+    const { timeZone } = school.settings;
+
+    // Create moment objects for the start and end of the day in the specified time zone
+    const startOfDay = moment.tz(date, 'YYYY-MM-DD', timeZone).startOf('day');
+    const endOfDay = moment.tz(date, 'YYYY-MM-DD', timeZone).endOf('day');
+
+    // Find lessons for the specified day
     const lessons = await Lesson.find({
-      date: { $gte: startDate, $lt: endDate },
-    }).populate('students instructors');
+      startTime: { $gte: startOfDay.toDate(), $lte: endOfDay.toDate() },
+    }).populate('instructors students');
 
     res.status(200).json({ lessons });
   } catch (error) {
     res.status(500).json({ message: messages.pt.internalServerError, error: error.message });
-  }
-}
-
-// Create all lessons for a specific day (admin-only)
-exports.createLessonsForDay = async (req, res) => {
-  try {
-
-    const { date, location, studentLimit } = req.body;
-
-    const school = await getSchoolObject();
-    const schoolId = school._id;
-    console.log(schoolId);
-
-    // Validate required fields
-    if (!date || !location || !studentLimit || !schoolId) {
-      return res.status(400).json({ message: messages.pt.allFieldsRequired });
-    }
-
-    // Define the usual time slots
-    const timeSlots = [
-      { start: '06:00', end: '07:00' },
-      { start: '07:00', end: '08:00' },
-      { start: '08:00', end: '09:00' },
-      { start: '09:00', end: '10:00' },
-      { start: '14:00', end: '15:00' },
-      { start: '15:00', end: '16:00' },
-      { start: '16:00', end: '17:00' },
-    ];
-
-    // Create lessons for each time slot
-    const lessons = [];
-    for (const timeSlot of timeSlots) {
-      const newLesson = new Lesson({
-        date: new Date(date),
-        timeSlot,
-        location,
-        studentLimit,
-        school: schoolId,
-      });
-      lessons.push(newLesson);
-    }
-
-    // Save all lessons to the database
-    await Lesson.insertMany(lessons);
-
-    res.status(201).json({ message: 'Lessons created successfully', lessons });
-  } catch (error) {
-    res.status(500).json({ message: messages.pt.internalServerError, error: error.message });
-  }
-};
-
-exports.createLesson = async (req, res) => {
-  try {
-    const { date, timeSlot, location, studentLimit } = req.body;
-
-    const school = await getSchoolObject();
-    const schoolId = school._id;
-
-    if (!date || !timeSlot || !location || !studentLimit || !schoolId) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    const newLesson = new Lesson({
-      date: new Date(date),
-      timeSlot,
-      location,
-      studentLimit,
-      school: schoolId,
-    });
-    console.log(newLesson);
-    await newLesson.save();
-    res.status(201).json({ message: 'Lesson created successfully', lesson: newLesson });
-  } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
 
@@ -192,34 +124,55 @@ exports.bookLesson = async (req, res) => {
 }
 
 exports.cancelBooking = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { lessonId } = req.params;
     const studentId = req.user.id; //authenticated user 
 
-    const lesson = await Lesson.findById(lessonId);
+    const lesson = await Lesson.findById(lessonId).session(session);
 
     if (!lesson) {
-      return res.status(404).json({ message: 'Lesson not found' });
+      return res.status(404).json({ message: messages.pt.lessonNotFound });
+    }
+
+    // Retrieve the school's time zone from the lesson
+    const school = await getSchoolObject();
+    const timeZone = school.settings.timeZone;
+
+    // Check if the cancellation is less than 12 hours before the lesson starts
+    const now = moment.tz(timeZone);
+    const lessonStartTime = moment.tz(lesson.startTime, timeZone);
+    const hoursDifference = lessonStartTime.diff(now, 'hours');
+    if (hoursDifference < 12) {
+      return res.status(400).json({ message: messages.pt.lessonCannotCancel });
     }
 
     // Remove the student from the lesson
     lesson.students = lesson.students.filter(student => student.toString() !== studentId);
-    await lesson.save();
+    await lesson.save({ session });
+
+    // Update the student's lesson history and lesson counts
+    const user = await User.findById(studentId).populate('studentProfile').session(session);
+   
+    if (!user.studentProfile) {
+      return res.status(400).json({ message: 'Student profile not found' });
+    }
+
+    user.studentProfile.lessonHistory = user.studentProfile.lessonHistory.filter(lesson => lesson.toString() !== lessonId);
+    user.studentProfile.lessonsBooked -= 1;
+    user.studentProfile.lessonsRemaining += 1;
+    await user.studentProfile.save({ session });
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({ message: 'Booking cancelled successfully', lesson });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
-  }
-}
-
-exports.getStudentLessons = async (req, res) => {
-  try {
-    const studentId = req.user.id; //authenticated user 
-
-    const lessons = await Lesson.find({ students: studentId }).populate('students');
-
-    res.status(200).json(lessons);
-  } catch (error) {
+    // Abort the transaction in case of error
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
@@ -252,3 +205,102 @@ exports.getSchoolLessons = async (req, res) => {
     res.status(500).json({ message: messages.pt.internalServerError, error: error.message });
   }
 }
+
+
+//Admin
+// Create all lessons for a specific day (admin-only)
+exports.createLessonsForDay = async (req, res) => {
+  try {
+
+    const { date, location, studentLimit } = req.body;
+
+    const school = await getSchoolObject();
+    const schoolId = school._id;
+
+    // Validate required fields
+    if (!date || !location || !studentLimit || !schoolId) {
+      return res.status(400).json({ message: messages.pt.allFieldsRequired });
+    }
+
+    const { lessonDuration, timeZone } = school.settings;
+    
+    const startTimes = ['06:00', '07:00', '08:00', '09:00', '14:00', '15:00', '16:00'];
+
+    // Create lessons for each start time
+    const lessons = [];
+    for (const startTimeStr of startTimes) {
+      // Create a moment object for the start time in the specified time zone
+      const startTime = moment.tz(`${date} ${startTimeStr}`, timeZone);
+      // Calculate end time based on duration
+      const endTime = startTime.clone().add(lessonDuration, 'minutes');
+
+      const newLesson = new Lesson({
+        startTime: startTime.toDate(),
+        endTime: endTime.toDate(),
+        location,
+        studentLimit,
+        school: schoolId,
+      });
+      lessons.push(newLesson);
+    }
+
+
+    // Save all lessons to the database
+    await Lesson.insertMany(lessons);
+
+    res.status(201).json({ message: 'Lessons created successfully', lessons });
+  } catch (error) {
+    res.status(500).json({ message: messages.pt.internalServerError, error: error.message });
+  }
+};
+
+exports.createLesson = async (req, res) => {
+  try {
+    const {startTime, location, studentLimit } = req.body;
+
+    const school = await getSchoolObject();
+    const schoolId = school._id;
+
+    if (!startTime || !location || !studentLimit || !schoolId) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const { lessonDuration, timeZone } = school.settings;
+
+    // Create a moment object for the start time in the specified time zone
+    const lessonStartTime = moment.tz(`${startTime}`, timeZone);
+
+    // Calculate end time based on duration
+    const lessonEndTime = lessonStartTime.clone().add(lessonDuration, 'minutes');
+
+    // Create a new lesson
+    const newLesson = new Lesson({
+      startTime: lessonStartTime,
+      endTime: lessonEndTime,
+      location,
+      studentLimit,
+      school: schoolId,
+    });
+
+    await newLesson.save();
+    res.status(201).json({ message: 'Lesson created successfully', lesson: newLesson });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+}
+
+exports.getBookedLessonsPerStudent = async (req, res) => {
+  try {
+    const studentId = req.user.id; // Get the student ID from the authenticated user
+
+    // Find lessons where the authenticated user is booked
+    const lessons = await Lesson.find({
+      students: studentId,
+    });
+
+    res.status(200).json({ lessons });
+  } catch (error) {
+    console.error('Error retrieving booked lessons per student:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};

@@ -2,6 +2,7 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 const StudentProfile = require('../models/StudentProfile');
 const School = require('../models/School');
+const Lesson = require('../models/Lesson');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -195,5 +196,29 @@ exports.resetPassword = async (req, res) => {
     res.status(200).json({ message: messages.pt.passwordResetSuccess });
   } catch (error) {
     res.status(500).json({ message: messages.pt.internalServerError,  error: error.message });
+  }
+};
+
+// Get student lesson history
+exports.getStudentLessonHistory = async (req, res) => {
+  try {
+    const studentId = req.user.id; // Get the student ID from the authenticated user
+
+    // Retrieve the user's profile with the studentProfile populated
+    const user = await User.findById(studentId).populate('studentProfile');
+
+    if (!user.studentProfile) {
+      return res.status(400).json({ message: 'Student profile not found' });
+    }
+
+    // Retrieve the lessons from the student's lesson history
+    const lessons = await Lesson.find({
+      _id: { $in: user.studentProfile.lessonHistory },
+    }).populate('instructors students');
+
+    res.status(200).json({ lessons });
+  } catch (error) {
+    console.error('Error retrieving lesson history:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };

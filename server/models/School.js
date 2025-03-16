@@ -1,13 +1,24 @@
 const mongoose = require('mongoose');
 
+const settingsSchema = new mongoose.Schema({
+  themeColor: { type: String, default: '#FFFFFF' },
+  logoUrl: { type: String },
+  iconSet: { type: String },
+  customCSS: { type: String },
+  lessonDuration: { type: Number, default: 60 }, // in minutes
+  timeZone: { type: String, default: 'America/Sao_Paulo' }, // Default time zone for UTC-3
+  language: { type: String, default: 'pt' }, // Default language
+  currency: { type: String, default: 'BRL' }, // Default currency
+});
+
 const schoolSchema = new mongoose.Schema({
     name: { type: String, required: true },
     address: { type: String },
     contactEmail: { type: String },
     contactPhone: { type: String },
     users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    surfSessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SurfSession' }],
-    settings: { type: mongoose.Schema.Types.ObjectId, ref: 'Settings' }, // Reference to Settings
+    lessons: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' }],
+    settings: { type: settingsSchema, default: () => ({}) }, // Initialize with default values
   });
 
 const SchoolSchema = mongoose.model('School', schoolSchema);
