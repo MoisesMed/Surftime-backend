@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult} = require('express-validator');
-const { getStudentLessonHistory, registerUser, getUsers, loginUser, validateEmail, requestPasswordReset, resetPassword } = require('../controllers/userController');
+const { getStudentLessonHistory, registerUser, getUsers, loginUser, validateEmail, requestPasswordReset, resetPassword, getAuthenticatedUserData, editUserInfo } = require('../controllers/userController');
 const validateToken = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -29,5 +29,8 @@ router.get('/validate-email', validateEmail);
 router.post('/request-password-reset', requestPasswordReset);
 router.post('/reset-password', resetPassword);
 router.get('/lesson-history', validateToken, getStudentLessonHistory);
+router.get('/me', validateToken, getAuthenticatedUserData);
+// Edit user information (admin-only route)
+router.put('/:userId', validateToken, requireAdmin, editUserInfo);
 
 module.exports = router;

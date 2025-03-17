@@ -25,7 +25,7 @@ exports.loginUser = async (req, res) => {
       return res.status(400).json({ message: messages.pt.invalidPassword });
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '7d' });
 
     const { password: _, ...userWithoutPassword } = user.toObject();
 
@@ -219,6 +219,65 @@ exports.getStudentLessonHistory = async (req, res) => {
     res.status(200).json({ lessons });
   } catch (error) {
     console.error('Error retrieving lesson history:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Get authenticated user data
+exports.getAuthenticatedUserData = async (req, res) => {
+  try {
+    const userId = req.user.id; // Get the user ID from the authenticated user
+
+    // Find the user and populate related fields
+    const user = await User.findById(userId).populate('studentProfile');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Find lessons where the authenticated user is booked
+    const lessons = await Lesson.find({
+      students: userId,
+    });
+
+    res.status(200).json({ user, lessons });
+  } catch (error) {
+    console.error('Error retrieving user data:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Edit user information (admin-only)
+exports.editUserInfo = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role, isAdmin, status, lessonsRemaining, contractType } = req.body;
+
+    // Find the user by ID
+    const user = await User.findById(userId).populate('studentProfile');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update user fields
+    if (role) user.role = role;
+    if (typeof isAdmin === 'boolean') user.isAdmin = isAdmin;
+
+    // Update student profile fields if the user is a student
+    if (user.studentProfile) {
+      if (status) user.studentProfile.status = status;
+      if (typeof lessonsRemaining === 'number') user.studentProfile.lessonsRemaining = lessonsRemaining;
+      if (contractType) user.studentProfile.contractType = contractType;
+      await user.studentProfile.save();
+    }
+
+    // Save the updated user
+    await user.save();
+
+    res.status(200).json({ message: 'User information updated successfully', user });
+  } catch (error) {
+    console.error('Error updating user information:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
