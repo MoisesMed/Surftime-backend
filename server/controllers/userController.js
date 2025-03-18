@@ -251,7 +251,7 @@ exports.getAuthenticatedUserData = async (req, res) => {
 exports.editUserInfo = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { role, isAdmin, status, lessonsRemaining, contractType } = req.body;
+    const { role, isAdmin, status, lessonsRemaining, contractType, contractExpiration } = req.body;
 
     // Find the user by ID
     const user = await User.findById(userId).populate('studentProfile');
@@ -269,6 +269,7 @@ exports.editUserInfo = async (req, res) => {
       if (status) user.studentProfile.status = status;
       if (typeof lessonsRemaining === 'number') user.studentProfile.lessonsRemaining = lessonsRemaining;
       if (contractType) user.studentProfile.contractType = contractType;
+      if (contractExpiration) user.studentProfile.contractExpiration = contractExpiration;
       await user.studentProfile.save();
     }
 
