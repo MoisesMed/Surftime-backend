@@ -24,7 +24,7 @@ router.post('/:lessonId/assign-instructor', requireAuth, requireAdmin, assignIns
 router.post('/:lessonId/book', requireAuth, bookLesson);
 
 // Cancel booking
-router.get('/:lessonId/cancel-booking', requireAuth, cancelBooking);
+router.post('/:lessonId/cancel-booking', requireAuth, cancelBooking);
 
 // Get all booked lessons for a student
 router.get('/student/booked', requireAuth, getBookedLessonsPerStudent);
