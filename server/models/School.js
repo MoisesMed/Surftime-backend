@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
   themeColor: { type: String, default: '#FFFFFF' },
-  logoUrl: { type: String },
+  logoUrls: [{ type: String }],
   iconSet: { type: String },
   customCSS: { type: String },
   lessonDuration: { type: Number, default: 60 }, // in minutes
