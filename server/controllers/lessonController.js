@@ -214,6 +214,35 @@ exports.getSchoolLessons = async (req, res) => {
   }
 }
 
+// Get the next lesson booked by the authenticated student
+exports.getNextLessonByStudent = async (req, res) => {
+  try {
+    const studentId = req.user.id; // Get the student ID from the authenticated user
+
+    // Log the current date for debugging
+    const currentDate = new Date();
+    console.log(studentId);
+    console.log('Current Date:', currentDate);
+
+    // Find the next lesson where the student is booked
+    const nextLesson = await Lesson.findOne({
+      students: studentId,
+      startTime: { $gt: currentDate }, // Only consider future lessons
+    })
+      .sort({ startTime: 1 }) // Sort by startTime in ascending order
+      .populate('instructors students');
+
+    if (!nextLesson) {
+      return res.status(404).json({ message: 'No upcoming lessons found' });
+    }
+
+    res.status(200).json({ nextLesson });
+  } catch (error) {
+    console.error('Error retrieving next lesson:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+}
+
 
 //Admin
 // Create all lessons for a specific day (admin-only)
