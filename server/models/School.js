@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const contractSchema = require('./Contract'); // Import the contract schema
 
 const settingsSchema = new mongoose.Schema({
   themeColor: { type: String, default: '#FFFFFF' },
@@ -9,6 +10,8 @@ const settingsSchema = new mongoose.Schema({
   timeZone: { type: String, default: 'America/Sao_Paulo' }, // Default time zone for UTC-3
   language: { type: String, default: 'pt' }, // Default language
   currency: { type: String, default: 'BRL' }, // Default currency
+  cancellationPolicy: { type: Number, default: 12 }, // In hours
+  contracts: [contractSchema], // Array of embedded contract schemas
 });
 
 const schoolSchema = new mongoose.Schema({

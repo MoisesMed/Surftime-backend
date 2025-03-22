@@ -4,6 +4,8 @@ const User = require('../models/User');
 const getSchoolObject = require('../utils/getSchoolObject');
 const messages = require('../resources/messages');
 const moment = require('moment-timezone');
+const { calculateRemainingCredits } = require('../utils/creditsUtils');
+
 
 // Get all lessons by date
 exports.getLessonsByDate = async (req, res) => {
@@ -94,8 +96,16 @@ exports.bookLesson = async (req, res) => {
       return res.status(400).json({ message: 'Student profile not found' });
     }
 
+    // Calculate remaining credits
+    const remainingCredits = calculateRemainingCredits(user.studentProfile);
+
+    // Check if the contract has expired
+    if (user.studentProfile.contractExpiration && new Date() > user.studentProfile.contractExpiration) {
+      return res.status(400).json({ message: 'Contract has expired' });
+    }
+
     // Check if the student has remaining lessons
-    if (user.studentProfile.lessonsRemaining <= 0) {
+    if (remainingCredits <= 0) {
       return res.status(400).json({ message: messages.pt.lessonCannotBook });
     }
     
@@ -106,8 +116,7 @@ exports.bookLesson = async (req, res) => {
 
     // Update the student's lesson history and lesson counts
     user.studentProfile.lessonHistory.push(lessonId);
-    user.studentProfile.lessonsBooked += 1;
-    user.studentProfile.lessonsRemaining -= 1;
+    user.studentProfile.usedCredits += 1;
     await user.studentProfile.save({ session });
 
     // Commit the transaction
@@ -138,13 +147,13 @@ exports.cancelBooking = async (req, res) => {
 
     // Retrieve the school's time zone from the lesson
     const school = await getSchoolObject();
-    const timeZone = school.settings.timeZone;
+    const { timeZone, cancellationPolicy } = school.settings;
 
     // Check if the cancellation is less than 12 hours before the lesson starts
     const now = moment.tz(timeZone);
     const lessonStartTime = moment.tz(lesson.startTime, timeZone);
     const hoursDifference = lessonStartTime.diff(now, 'hours');
-    if (hoursDifference < 12) {
+    if (hoursDifference < cancellationPolicy) {
       return res.status(400).json({ message: messages.pt.lessonCannotCancel });
     }
 
@@ -160,8 +169,7 @@ exports.cancelBooking = async (req, res) => {
     }
 
     user.studentProfile.lessonHistory = user.studentProfile.lessonHistory.filter(lesson => lesson.toString() !== lessonId);
-    user.studentProfile.lessonsBooked -= 1;
-    user.studentProfile.lessonsRemaining += 1;
+    user.studentProfile.usedCredits -= 1;
     await user.studentProfile.save({ session });
 
     // Commit the transaction

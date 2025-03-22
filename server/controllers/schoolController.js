@@ -120,3 +120,35 @@ exports.updateSchool = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+exports.createContracts = async (req, res) => {
+  try {
+    const school = await getSchoolObject();
+    const contracts = req.body; // Get contract details from request body
+
+    // Validate required fields for each contract
+    for (const contract of contracts) {
+      const { type, credits, price, expirationPeriod } = contract;
+      if (!type || !credits || price === undefined || !expirationPeriod.value || !expirationPeriod.unit) {
+        return res.status(400).json({ message: 'Missing required fields in one or more contracts' });
+      }
+    }
+
+    // Add each contract to the school's settings
+    for (const contract of contracts) {
+      const { type } = contract;
+      // Check if a contract with the same type already exists
+      const existingContract = school.settings.contracts.find(c => c.type === type);
+      if (existingContract) {
+        return res.status(400).json({ message: `Contract type "${type}" already exists` });
+      }
+      school.settings.contracts.push(contract);
+    }
+
+    await school.save();
+
+    res.status(200).json({ message: 'School contracts updated successfully', school: school });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};

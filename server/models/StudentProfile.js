@@ -3,11 +3,11 @@ const mongoose = require('mongoose');
 const studentProfileSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
-  lessonsBooked: { type: Number, default: 0 },
-  lessonsRemaining: { type: Number, default: 2 },
+  totalCredits: { type: Number, default: 0 }, // Total number of credits purchased
+  usedCredits: { type: Number, default: 0 }, // Number of credits used
+  contract: { type: mongoose.Schema.Types.ObjectId }, // Reference to the assigned Contract within the school
+  contractExpiration: { type: Date }, // Expiration date of the assigned Contract
   lessonHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' }], 
-  contractType: { type: String, enum: ['12 lessons', 'experimental', '15 lessons'], default: 'experimental' },
-  contractExpiration: { type: Date },
 });
 
 module.exports = mongoose.model('StudentProfile', studentProfileSchema);

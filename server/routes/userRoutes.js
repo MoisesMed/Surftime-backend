@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult} = require('express-validator');
-const { getStudentLessonHistory, registerUser, getUsers, loginUser, validateEmail, requestPasswordReset, resetPassword, getAuthenticatedUserData, editUserInfo } = require('../controllers/userController');
+const { assignContractToStudent, getStudentLessonHistory, registerUser, getUsers, loginUser, validateEmail, requestPasswordReset, resetPassword, getAuthenticatedUserData, editUserInfo } = require('../controllers/userController');
 const validateToken = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -32,5 +32,7 @@ router.get('/lesson-history', validateToken, getStudentLessonHistory);
 router.get('/me', validateToken, getAuthenticatedUserData);
 // Edit user information (admin-only route)
 router.put('/:userId', validateToken, requireAdmin, editUserInfo);
+router.patch('/:userId/assign-contract', validateToken, requireAdmin, assignContractToStudent);
+// router.patch('/:userId/remove-contract', validateToken, requireAdmin, removeContractFromStudent);
 
 module.exports = router;

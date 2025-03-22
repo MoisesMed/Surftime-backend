@@ -6,8 +6,10 @@ const Lesson = require('../models/Lesson');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const moment = require('moment-timezone');
 const { client, twilioPhoneNumber } = require('../config/twilioConfig');
 const messages = require('../resources/messages');
+const getSchoolObject = require('../utils/getSchoolObject');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -101,7 +103,7 @@ exports.registerUser = async (req, res) => {
     session.endSession();
     res.status(500).json({ message: messages.pt.registrationError, error: error.message });
   }
-};
+}
 
 exports.getUsers = async (req, res) => {
   try {
@@ -251,7 +253,7 @@ exports.getAuthenticatedUserData = async (req, res) => {
 exports.editUserInfo = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { role, isAdmin, status, lessonsRemaining, contractType, contractExpiration } = req.body;
+    const { role, isAdmin, status } = req.body;
 
     // Find the user by ID
     const user = await User.findById(userId).populate('studentProfile');
@@ -267,9 +269,6 @@ exports.editUserInfo = async (req, res) => {
     // Update student profile fields if the user is a student
     if (user.studentProfile) {
       if (status) user.studentProfile.status = status;
-      if (typeof lessonsRemaining === 'number') user.studentProfile.lessonsRemaining = lessonsRemaining;
-      if (contractType) user.studentProfile.contractType = contractType;
-      if (contractExpiration) user.studentProfile.contractExpiration = contractExpiration;
       await user.studentProfile.save();
     }
 
@@ -279,6 +278,43 @@ exports.editUserInfo = async (req, res) => {
     res.status(200).json({ message: 'User information updated successfully', user });
   } catch (error) {
     console.error('Error updating user information:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Assign a contract to a student (admin-only)
+exports.assignContractToStudent = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { contractType } = req.body; // Get contract type from request body
+
+    // Find the user by ID and populate the studentProfile
+    const user = await User.findById(userId).populate('studentProfile');
+    if (!user || !user.studentProfile) {
+      return res.status(404).json({ message: 'User or student profile not found' });
+    }
+
+    const school = await getSchoolObject();
+
+    // Find the contract within the school's settings
+    const contract = school.settings.contracts.find(c => c.type === contractType);
+    if (!contract) {
+      return res.status(404).json({ message: 'Contract not found' });
+    }
+
+    // Calculate the contract expiration date
+    const contractExpiration = moment().add(contract.expirationPeriod.value, contract.expirationPeriod.unit).toDate();
+
+    // Update the student's profile with the new contract information
+    user.studentProfile.contract = contract._id;
+    user.studentProfile.totalCredits = contract.credits;
+    user.studentProfile.usedCredits = 0; // Reset used credits
+    user.studentProfile.contractExpiration = contractExpiration;
+    await user.studentProfile.save();
+
+    res.status(200).json({ message: 'Contract assigned successfully', studentProfile: user.studentProfile });
+  } catch (error) {
+    console.error('Error assigning contract:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
