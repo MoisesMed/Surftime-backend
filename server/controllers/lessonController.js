@@ -79,6 +79,12 @@ exports.bookLesson = async (req, res) => {
       return res.status(404).json({ message: messages.pt.lessonNotFound });
     }
 
+    // Check if the lesson is in the past
+    const now = new Date();
+    if (lesson.startTime <= now) {
+      return res.status(400).json({ message: 'Cannot book a lesson that is in the past' });
+    }
+
     // Check if the student is already booked
     if (lesson.students.includes(studentId)) {
       return res.status(400).json({ message: messages.pt.lessonAlreadyBooked });
