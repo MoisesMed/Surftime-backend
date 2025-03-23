@@ -5,7 +5,24 @@ const getSchoolObject = require('../utils/getSchoolObject');
 const messages = require('../resources/messages');
 const moment = require('moment-timezone');
 const { calculateRemainingCredits } = require('../utils/creditsUtils');
+const webPush = require('web-push');
 
+// Function to send a notification to a user
+async function sendNotification(userId, payload) {
+  try {
+    // Retrieve the user's subscription information
+    const user = await User.findById(userId);
+    if (!user || !user.subscription) {
+      throw new Error('User or subscription not found');
+    }
+
+    // Send the notification
+    await webPush.sendNotification(user.subscription, JSON.stringify(payload));
+    console.log('Notification sent successfully');
+  } catch (error) {
+    console.error('Error sending notification:', error);
+  }
+}
 
 // Get all lessons by date
 exports.getLessonsByDate = async (req, res) => {
@@ -59,11 +76,110 @@ exports.assignInstructor = async (req, res) => {
     // Assign the instructor to the lesson
     const lesson = await Lesson.findByIdAndUpdate(lessonObj, { instructors: instructorObj }, { new: true });
 
+    // Send a notification to the instructor
+    // const lessonDetails = {
+    //   title: 'New Lesson Assigned',
+    //   body: `You have been assigned to a new lesson starting at ${lesson.startTime}`,
+    // };
+    // await sendNotification(instructorId, lessonDetails);
+
     res.status(200).json({ message: 'Instructor assigned successfully', lesson });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
+
+// Assign an instructor to multiple lessons (admin-only)
+exports.assignInstructorToLessons = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { instructorId, lessonIds } = req.body; // Get instructor ID and lesson IDs from request body
+
+    // Validate input
+    if (!instructorId || !lessonIds || !Array.isArray(lessonIds)) {
+      return res.status(400).json({ message: 'Invalid input' });
+    }
+
+    // Assign the instructor to each lesson
+    const lessons = await Lesson.find({ _id: { $in: lessonIds } }).session(session);
+    for (const lesson of lessons) {
+      if (!lesson.instructors.includes(instructorId)) {
+        lesson.instructors.push(instructorId);
+        await lesson.save({ session });
+      }
+    }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    // // Send a notification to the instructor
+    // const lessonDetails = {
+    //   title: 'New Lessons Assigned',
+    //   body: `You have been assigned to new lessons.`,
+    // };
+    // await sendNotification(instructorId, lessonDetails);
+
+    res.status(200).json({ message: 'Instructor assigned to lessons successfully', lessons });
+  } catch (error) {
+    // Abort the transaction in case of error
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error assigning instructor to lessons:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Remove an instructor from a lesson (admin-only)
+exports.removeInstructorFromLesson = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { lessonId } = req.params;
+    const { instructorId } = req.body; // Get instructor ID from request body
+
+    // Find the lesson
+    const lesson = await Lesson.findById(lessonId).session(session);
+
+    if (!lesson) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    // Remove the instructor from the lesson
+    lesson.instructors = lesson.instructors.filter(id => id.toString() !== instructorId);
+    await lesson.save({ session });
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({ message: 'Instructor removed successfully', lesson });
+  } catch (error) {
+    // Abort the transaction in case of error
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error removing instructor:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Get all lessons for a specific instructor
+exports.getLessonsByInstructor = async (req, res) => {
+  try {
+    const { instructorId } = req.params;
+
+    // Find lessons where the instructor is assigned
+    const lessons = await Lesson.find({
+      instructors: instructorId,
+    }).populate('instructors students');
+
+    res.status(200).json({ lessons });
+  } catch (error) {
+    console.error('Error retrieving lessons by instructor:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
 
 exports.bookLesson = async (req, res) => {
   const session = await mongoose.startSession();
@@ -199,7 +315,7 @@ exports.getAssignedLessonsByInstructor = async (req, res) => {
       return res.status(400).json({ message: 'Invalid instructor' });
     }
 
-    const lessons = await Lesson.find({ instructors: instructorId }).populate('instructors');
+    const lessons = await Lesson.find({ instructors: instructorId }).populate('instructors students');
 
     res.status(200).json(lessons);
   } catch (error) {

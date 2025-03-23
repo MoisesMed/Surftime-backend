@@ -264,6 +264,10 @@ exports.editUserInfo = async (req, res) => {
 
     // Update user fields
     if (role) user.role = role;
+    if (role === "instructor"){
+      //delete user.studentProfile;
+      user.studentProfile = undefined;
+    }
     if (typeof isAdmin === 'boolean') user.isAdmin = isAdmin;
 
     // Update student profile fields if the user is a student
