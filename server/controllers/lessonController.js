@@ -50,7 +50,7 @@ exports.getLessonsByDate = async (req, res) => {
     // Find lessons for the specified day
     const lessons = await Lesson.find({
       startTime: { $gte: startOfDay.toDate(), $lte: endOfDay.toDate() },
-    }).populate('instructors students');
+    });
 
     res.status(200).json({ lessons });
   } catch (error) {
