@@ -62,6 +62,34 @@ exports.getSchoolData = async (req, res) => {
   }
 };
 
+exports.getSchoolDataForUser = async (req, res) => {
+try {
+    const schoolObj = await getSchoolObject();
+  
+    // Find the school by ID and select only the basic fields
+    const school = await School.findById(schoolObj._id).select('name address contactEmail contactPhone settings.logoUrls');
+  
+    if (!school) {
+      return res.status(404).json({ message: 'School not found' });
+    }
+  
+    // Extract the basic information
+    const schoolData = {
+      name: school.name,
+      address: school.address,
+      contactEmail: school.contactEmail,
+      contactPhone: school.contactPhone,
+      logoUrls: school.settings.logoUrls,
+    };
+    
+    res.status(200).json({ schoolData });
+} catch (error) {
+  res.status(500).json({ message: 'Internal server error', error: error.message });
+}
+
+
+};
+
 exports.updateSchool = async (req, res) => {
   try {
     const school = await getSchoolObject();
