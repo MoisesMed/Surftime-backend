@@ -322,3 +322,38 @@ exports.assignContractToStudent = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+exports.getActiveNonExperimentalContracts = async (req, res) => {
+  try {
+    // Query for active student profiles with a contract that is not "experimental"
+    const studentProfiles = await StudentProfile.find({
+      status: 'active',
+      contract: { $exists: true },
+    }).populate('user'); // Populate the user field to get user details
+
+    const school = await getSchoolObject();
+
+    // Filter out students with the "experimental" contract
+    const studentsData = studentProfiles
+      .map(profile => {
+        const contract = school.settings.contracts.find(c => c._id.equals(profile.contract));
+        if (contract && contract.type !== 'experimental') {
+          return {
+            userId: profile.user._id,
+            fullName: profile.user.fullName,
+            email: profile.user.email,
+            contractType: contract.type,
+            totalCredits: profile.totalCredits,
+            usedCredits: profile.usedCredits,
+            contractExpiration: profile.contractExpiration,
+          };
+        }
+        return null;
+      })
+      .filter(data => data !== null);
+        
+    res.status(200).json({ students: studentsData });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};

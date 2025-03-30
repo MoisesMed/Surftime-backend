@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult} = require('express-validator');
-const { assignContractToStudent, getStudentLessonHistory, registerUser, getUsers, loginUser, validateEmail, requestPasswordReset, resetPassword, getAuthenticatedUserData, editUserInfo } = require('../controllers/userController');
+const { assignContractToStudent, getStudentLessonHistory, registerUser, getUsers, loginUser, validateEmail, requestPasswordReset, resetPassword, getAuthenticatedUserData, editUserInfo, getActiveNonExperimentalContracts } = require('../controllers/userController');
 const validateToken = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -34,5 +34,8 @@ router.get('/me', validateToken, getAuthenticatedUserData);
 router.put('/:userId', validateToken, requireAdmin, editUserInfo);
 router.patch('/:userId/assign-contract', validateToken, requireAdmin, assignContractToStudent);
 // router.patch('/:userId/remove-contract', validateToken, requireAdmin, removeContractFromStudent);
+// Get count of students with active non-experimental contracts (admin-only route)
+router.get('/active-contracts', validateToken, requireAdmin, getActiveNonExperimentalContracts);
+
 
 module.exports = router;
