@@ -1,5 +1,5 @@
 const express = require('express');
-const { getBookedLessonsPerStudent, getAssignedLessonsByInstructor, createLesson, assignInstructor, assignInstructorToLessons, removeInstructorFromLesson, getLessonsByInstructor, bookLesson, cancelBooking, getSchoolLessons, getLessonsByDate, createLessonsForDay, getNextLessonByStudent } = require('../controllers/lessonController');
+const { getTodaysLessonsByStudent, getBookedLessonsPerStudent, getAssignedLessonsByInstructor, createLesson, assignInstructor, assignInstructorToLessons, removeInstructorFromLesson, getLessonsByInstructor, bookLesson, cancelBooking, getSchoolLessons, getLessonsByDate, createLessonsForDay, getNextLessonByStudent } = require('../controllers/lessonController');
 const requireAuth = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -7,6 +7,9 @@ const router = express.Router();
 
 //Get school lessons
 router.get('/', requireAuth, getSchoolLessons);
+
+// Get today's lessons booked by the authenticated student
+router.get('/today', requireAuth, getTodaysLessonsByStudent);
 
 //Get the next lesson booked by authenticated student
 router.get('/next', requireAuth, getNextLessonByStudent);

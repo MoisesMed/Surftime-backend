@@ -463,3 +463,29 @@ exports.getBookedLessonsPerStudent = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+exports.getTodaysLessonsByStudent = async (req, res) => {
+  try {
+    const studentId = req.user.id; // Get the student ID from the authenticated user
+    const school = await getSchoolObject();
+    const { timeZone } = school.settings;
+
+    // Get the start and end of the current day in the specified time zone
+    const startOfDay = moment.tz(timeZone).startOf('day').toDate();
+    const endOfDay = moment.tz(timeZone).endOf('day').toDate();
+
+    // Find lessons where the student is booked and the startTime is today
+    const todayLesson = await Lesson.find({
+      students: studentId,
+      startTime: { $gte: startOfDay, $lte: endOfDay },
+    }).populate('instructors students');
+
+    if (!todayLesson) {
+      return res.status(404).json({ message: 'No lessons found for today' });
+    }
+
+    res.status(200).json({ todayLesson });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
