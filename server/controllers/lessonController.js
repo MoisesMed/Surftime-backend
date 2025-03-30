@@ -188,6 +188,8 @@ exports.bookLesson = async (req, res) => {
   try {
     const { lessonId } = req.params;
     const studentId = req.user.id; //authenticated user 
+    const school = await getSchoolObject();
+    const { timeZone, bookingWindow } = school.settings;
 
     const lesson = await Lesson.findById(lessonId).session(session);
 
@@ -195,8 +197,24 @@ exports.bookLesson = async (req, res) => {
       return res.status(404).json({ message: messages.pt.lessonNotFound });
     }
 
+    // Check if the booking is within the allowed window
+    const now = moment.tz(timeZone);
+    const lessonStartTime = moment.tz(lesson.startTime, timeZone);
+    const hoursDifference = lessonStartTime.diff(now, 'hours');
+
+    console.log('now', now);
+    console.log('lesson start time', lessonStartTime);
+    console.log('Hours Difference:', hoursDifference);
+    
+    if (hoursDifference <= 0 ) {
+      return res.status(400).json({ message: 'Cannot book a lesson that is in the past or currently ongoing' });
+    }
+
+    if (hoursDifference < bookingWindow) {
+      return res.status(400).json({ message: `Cannot book a lesson less than ${bookingWindow} hours before it starts` });
+    }
+
     // Check if the lesson is in the past
-    const now = new Date();
     if (lesson.startTime <= now) {
       return res.status(400).json({ message: 'Cannot book a lesson that is in the past' });
     }

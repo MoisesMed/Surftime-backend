@@ -11,6 +11,7 @@ const settingsSchema = new mongoose.Schema({
   language: { type: String, default: 'pt' }, // Default language
   currency: { type: String, default: 'BRL' }, // Default currency
   cancellationPolicy: { type: Number, default: 12 }, // In hours
+  bookingWindow: { type: Number, default: 8 }, // Hours before a lesson that a user can book
   contracts: [contractSchema], // Array of embedded contract schemas
 });
 
