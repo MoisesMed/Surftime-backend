@@ -357,3 +357,24 @@ exports.getActiveNonExperimentalContracts = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+exports.countActiveNonExperimentalContracts = async (req, res) => {
+  try {
+    const school = await getSchoolObject();
+
+    // Get the IDs of non-experimental contracts
+    const nonExperimentalContractIds = school.settings.contracts
+      .filter(contract => contract.type !== 'experimental')
+      .map(contract => contract._id);
+
+    // Count active student profiles with a non-experimental contract
+    const count = await StudentProfile.countDocuments({
+      status: 'active',
+      contract: { $in: nonExperimentalContractIds },
+    });
+
+    res.status(200).json({ activeNonExperimentalContractsCount: count });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
