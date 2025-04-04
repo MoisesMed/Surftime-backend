@@ -433,7 +433,7 @@ exports.createLessonsForDay = async (req, res) => {
 
 exports.createLesson = async (req, res) => {
   try {
-    const {startTime, location, studentLimit } = req.body;
+    const {startTime, endTime, location, studentLimit , instructors} = req.body;
 
     const school = await getSchoolObject();
     const schoolId = school._id;
@@ -447,8 +447,14 @@ exports.createLesson = async (req, res) => {
     // Create a moment object for the start time in the specified time zone
     const lessonStartTime = moment.tz(`${startTime}`, timeZone);
 
-    // Calculate end time based on duration
-    const lessonEndTime = lessonStartTime.clone().add(lessonDuration, 'minutes');
+    let lessonEndTime;
+
+    if (endTime) {
+      lessonEndTime = moment.tz(`${endTime}`, timeZone);
+    } else {
+      // Calculate end time based on duration
+      lessonEndTime = lessonStartTime.clone().add(lessonDuration, 'minutes');
+    }
 
     // Create a new lesson
     const newLesson = new Lesson({
@@ -457,6 +463,7 @@ exports.createLesson = async (req, res) => {
       location,
       studentLimit,
       school: schoolId,
+      instructors: instructors || []
     });
 
     await newLesson.save();
