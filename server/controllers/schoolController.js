@@ -2,7 +2,7 @@ const School = require('../models/School');
 const User = require('../models/User');
 const getSchoolObject = require('../utils/getSchoolObject');
 const cloudinary = require('../config/cloudinaryConfig');
-
+const moment = require('moment-timezone');
 
 
 exports.createSchool = async (req, res) => {
@@ -176,6 +176,39 @@ exports.createContracts = async (req, res) => {
     await school.save();
 
     res.status(200).json({ message: 'School contracts updated successfully', school: school });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Get default lesson times for a school
+exports.getDefaultLessonTimes = async (req, res) => {
+  try {
+    const school = await getSchoolObject();
+
+    const { timeZone } = school.settings;
+
+    // Define the default lesson times (example times)
+    const defaultLessonTimes = [
+      { startHour: 6, endHour: 7 },
+      { startHour: 7, endHour: 8 },
+      { startHour: 8, endHour: 9 },
+      { startHour: 9, endHour: 10 },
+      { startHour: 14, endHour: 15 },
+      { startHour: 15, endHour: 16 },
+      { startHour: 16, endHour: 17 },
+    ];
+
+    // Generate the lesson times for a specific date
+    const date = moment().format('YYYY-MM-DD'); // today date
+    const times = defaultLessonTimes.map(({ startHour, endHour }) => {
+      const startTime = moment.tz(`${date} ${startHour}:00`, 'YYYY-MM-DD HH:mm', timeZone).toISOString();
+      const endTime = moment.tz(`${date} ${endHour}:00`, 'YYYY-MM-DD HH:mm', timeZone).toISOString();
+      return { startTime, endTime };
+    });
+
+    // Return the default lesson times
+    res.status(200).json({ times });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
