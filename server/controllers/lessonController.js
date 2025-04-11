@@ -433,41 +433,53 @@ exports.createLessonsForDay = async (req, res) => {
 
 exports.createLesson = async (req, res) => {
   try {
-    const {startTime, endTime, location, studentLimit , instructors} = req.body;
+    const lessons = req.body;
+
+    // Validate required fields
+    if (!lessons || !Array.isArray(lessons)) {
+      return res.status(400).json({ message: 'Invalid input' });
+    }
 
     const school = await getSchoolObject();
     const schoolId = school._id;
-
-    if (!startTime || !location || !studentLimit || !schoolId) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
     const { lessonDuration, timeZone } = school.settings;
 
-    // Create a moment object for the start time in the specified time zone
-    const lessonStartTime = moment.tz(`${startTime}`, timeZone);
+    // Process each lesson in the array
+    const createdLessons = [];
+      for (const lessonData of lessons) {
+        const {startTime, endTime, location, studentLimit , instructors} = lessonData;
+          
+        if (!startTime || !endTime || !location || !studentLimit) {
+          return res.status(400).json({ message: 'Missing required fields' });
+        }
+        
+        // Create a moment object for the start time in the specified time zone
+        const lessonStartTime = moment.tz(`${startTime}`, timeZone);
 
-    let lessonEndTime;
+        let lessonEndTime;
 
-    if (endTime) {
-      lessonEndTime = moment.tz(`${endTime}`, timeZone);
-    } else {
-      // Calculate end time based on duration
-      lessonEndTime = lessonStartTime.clone().add(lessonDuration, 'minutes');
-    }
+        if (endTime) {
+          lessonEndTime = moment.tz(`${endTime}`, timeZone);
+        } else {
+          // Calculate end time based on duration
+          lessonEndTime = lessonStartTime.clone().add(lessonDuration, 'minutes');
+        }
 
-    // Create a new lesson
-    const newLesson = new Lesson({
-      startTime: lessonStartTime,
-      endTime: lessonEndTime,
-      location,
-      studentLimit,
-      school: schoolId,
-      instructors: instructors || []
-    });
+        // Create a new lesson
+        const newLesson = new Lesson({
+          startTime: lessonStartTime,
+          endTime: lessonEndTime,
+          location,
+          studentLimit,
+          school: schoolId,
+          instructors: instructors || []
+        });
 
-    await newLesson.save();
-    res.status(201).json({ message: 'Lesson created successfully', lesson: newLesson });
+        // Save the lesson to the database
+        await newLesson.save();
+        createdLessons.push(newLesson);
+      }
+    res.status(201).json({ message: 'Lesson created successfully', lesson: createdLessons });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
