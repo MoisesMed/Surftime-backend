@@ -7,6 +7,8 @@ const userRoutes = require('./routes/userRoutes');
 const validateRoutes = require('./routes/validatePhoneNumberRoutes');
 const schoolRoutes = require('./routes/schoolRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
+const instructorRoutes = require('./routes/instructorRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
 const validateHttps = require('./middleware/validateHttps');
 const context = require('./middleware/context');
 const helmet = require('helmet')
@@ -55,7 +57,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/validate', validateRoutes);
 app.use('/api/school', schoolRoutes);
 app.use('/api/lessons', lessonRoutes);
-app.use('/', (req, res)=> {
+app.use('/api/instructor', instructorRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/', (req, res) => {
   res.send('Hello, welcome to the surftime API!');
 });
 

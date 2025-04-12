@@ -7,12 +7,25 @@ const requireAdmin = require('../middleware/requireAdmin');
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' }); // Temporary storage for uploaded files
 
-router.get('/', validateToken, requireAdmin, getSchoolData);
-router.patch('/', validateToken, requireAdmin, upload.single('logo'), updateSchool);
-router.get('/user', getSchoolDataForUser);
+// Create a new school (admin-only route)
 router.post('/create', validateToken, requireAdmin, createSchool);
+
+// Get school data (admin-only route)
+router.get('/', validateToken, requireAdmin, getSchoolData);
+
+// Update school data (admin-only route)
+router.patch('/', validateToken, requireAdmin, upload.single('logo'), updateSchool);
+
+// Get school data for a specific user
+router.get('/user', getSchoolDataForUser);
+
+// Get users of a specific school
 router.get('/:schoolId/users', validateToken, getSchoolUsers);
+
+// Create contracts (admin-only route)
 router.post('/contracts', validateToken, requireAdmin, createContracts);
+
+// Get default lesson times
 router.get('/defaultLessonTimes', getDefaultLessonTimes);
 
 module.exports = router;

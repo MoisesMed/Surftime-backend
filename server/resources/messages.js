@@ -11,6 +11,15 @@ const messages = {
       instructorAssigned: 'Instructor assigned successfully',
       lessonBooked: 'Lesson booked successfully',
       internalServerError: 'Internal server error',
+      ratingOutOfRange: 'Rating must be between 1 and 5',
+      lessonNotFound: 'Lesson not found',
+      lessonNotEnded: 'Feedback can only be submitted after the lesson has ended',
+      feedbackAlreadySubmitted: 'Feedback already submitted for this lesson',
+      notEnrolledInLesson: 'You are not enrolled in this lesson',
+      feedbackTimeExpired: 'Feedback can only be submitted for lessons within the past 7 days',
+      dateRequired: 'Date is required',
+      internalServerError: 'Internal server error',
+      feedbackSubmitted: 'Feedback submitted successfully',
     },
     pt: {
       userNotFound: 'Usuário não encontrado.',
@@ -39,7 +48,16 @@ const messages = {
       lessonCannotCancel: 'Você não pode cancelar a aula com menos de 12 horas de antecedência.',
       internalServerError: 'Erro interno do servidor',
       allFieldsRequired: 'Todos os campos são necessários.',
-      lessonNotFound: 'Aula não encontrada.'
+      lessonNotFound: 'Aula não encontrada.',
+      ratingOutOfRange: 'A classificação deve estar entre 1 e 5',
+      lessonNotFound: 'Aula não encontrada',
+      lessonNotEnded: 'O feedback só pode ser enviado após o término da aula',
+      feedbackAlreadySubmitted: 'Feedback já enviado para esta aula',
+      notEnrolledInLesson: 'Você não está inscrito nesta aula',
+      feedbackTimeExpired: 'O feedback só pode ser enviado para aulas nos últimos 7 dias',
+      dateRequired: 'A data é obrigatória',
+      internalServerError: 'Erro interno do servidor',
+      feedbackSubmitted: 'Feedback enviado com sucesso',
     },
   };
   
