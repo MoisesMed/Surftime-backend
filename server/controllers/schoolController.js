@@ -182,9 +182,12 @@ exports.createContracts = async (req, res) => {
 };
 
 // Get default lesson times for a school
-exports.getDefaultLessonTimes = async (req, res) => {
+exports.getDefaultData = async (req, res) => {
   try {
     const school = await getSchoolObject();
+    
+    // Populate the users field after retrieving the school object
+    await school.populate('users');
 
     const { timeZone } = school.settings;
 
@@ -207,8 +210,19 @@ exports.getDefaultLessonTimes = async (req, res) => {
       return { startTime, endTime };
     });
 
+    const instructors = school.users.filter(user => user.role === 'instructor');
+    console.log(school.users);
+
     // Return the default lesson times
-    res.status(200).json({ times });
+    res.status(200).json({
+      times,
+      location: school.address,
+      lessonSlots: school.settings.numberOfStudentsPerLesson,
+      instructors: instructors.map(instructor => ({
+        id: instructor._id,
+        fullName: instructor.fullName,
+      })),
+    });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
