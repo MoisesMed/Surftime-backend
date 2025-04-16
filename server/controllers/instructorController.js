@@ -59,3 +59,14 @@ exports.getInstructorLessons = async (req, res) => {
         res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 };
+
+// Get all instructors
+exports.getAllInstructors = async (req, res) => {
+    try {
+        const instructors = await User.find({ role: 'instructor' }).populate('instructorProfile');
+        res.status(200).json(instructors);
+    } catch (error) {
+        console.error('Error retrieving instructors:', error);
+        res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+};

@@ -13,7 +13,8 @@ const {
     getSchoolLessons,
     getLessonsByDate,
     createLessonsForDay,
-    getNextLessonByStudent
+    getNextLessonByStudent,
+    editLesson
 } = require('../controllers/lessonController');
 const requireAuth = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
@@ -61,5 +62,8 @@ router.post('/:lessonId/book', requireAuth, bookLesson);
 
 // Cancel booking
 router.post('/:lessonId/cancel-booking', requireAuth, cancelBooking);
+
+// Edit lesson
+router.patch('/:lessonId', requireAuth, requireAdmin, editLesson);
 
 module.exports = router;

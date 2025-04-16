@@ -485,6 +485,25 @@ exports.createLesson = async (req, res) => {
   }
 }
 
+exports.editLesson = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const updateData = req.body; // Get update data from request body
+
+    // Find the lesson by ID and update it
+    const updatedLesson = await Lesson.findByIdAndUpdate(lessonId, updateData, { new: true });
+
+    if (!updatedLesson) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    res.status(200).json({ message: 'Lesson updated successfully', lesson: updatedLesson });
+  } catch (error) {
+    console.error('Error updating lesson:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
 exports.getBookedLessonsPerStudent = async (req, res) => {
   try {
     const studentId = req.user.id; // Get the student ID from the authenticated user
