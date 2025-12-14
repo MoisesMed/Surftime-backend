@@ -223,3 +223,54 @@ exports.getDefaultData = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+// GET /school/about
+exports.getAboutUs = async (req, res) => {
+  try {
+    const school = await getSchoolObject();
+    if (!school) {
+      return res.status(404).json({ message: 'School not found' });
+    }
+
+    res.status(200).json({ aboutUs: school.aboutUs });
+  } catch (err) {
+    res.status(500).json({ message: 'Internal server error', error: err.message });
+  }
+};
+
+
+exports.updateAboutUs = async (req, res) => {
+  try {
+    
+    const school = await getSchoolObject();
+    const schoolId = school._id;
+    const { aboutUs } = req.body;
+    
+    // Must be a string, but can contain HTML / rich text
+    if (typeof aboutUs !== 'string') {
+      return res.status(400).json({
+        message: 'aboutUs must be a string'
+      });
+    }
+
+    const updatedSchool = await School.findByIdAndUpdate(
+      schoolId,
+      { aboutUs },
+      { new: true }
+    ).select('aboutUs');
+
+    if (!updatedSchool) {
+      return res.status(404).json({ message: 'School not found' });
+    }
+
+    res.status(200).json({
+      message: 'About Us updated successfully',
+      aboutUs: updatedSchool.aboutUs
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: 'Internal server error',
+      error: err.message
+    });
+  }
+};

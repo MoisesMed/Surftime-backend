@@ -24,6 +24,7 @@ const schoolSchema = new mongoose.Schema({
     users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     lessons: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' }],
     settings: { type: settingsSchema, default: () => ({}) }, // Initialize with default values
+    aboutUs: { type: String }
   });
 
 const SchoolSchema = mongoose.model('School', schoolSchema);
