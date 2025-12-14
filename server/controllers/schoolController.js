@@ -72,17 +72,13 @@ try {
     if (!school) {
       return res.status(404).json({ message: 'School not found' });
     }
-  
-    // Extract the basic information
-    const schoolData = {
-      name: school.name,
+    
+    res.status(200).json({ name: school.name,
       address: school.address,
       contactEmail: school.contactEmail,
       contactPhone: school.contactPhone,
-      logoUrls: school.settings.logoUrls,
-    };
-    
-    res.status(200).json({ schoolData });
+      logoUrls: school.settings.logoUrls, 
+    });
 } catch (error) {
   res.status(500).json({ message: 'Internal server error', error: error.message });
 }
