@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['student', 'instructor'], default: 'student', required: true},
   isAdmin: { type: Boolean, default: false },
-  cpf: { type: String, unique: true, sparse: true },
+  cpf: { type: String, unique: true, sparse: true }, //TODO: make cpf required
   birthday: { type: Date, required: true },
   observations: { type: String },
   profileImageUrl: { type: String },

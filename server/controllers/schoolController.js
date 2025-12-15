@@ -30,15 +30,19 @@ exports.createSchool = async (req, res) => {
 
 exports.getSchoolUsers = async (req, res) => {
   try {
-    const { schoolId } = req.params;
+    const school = await getSchoolObject();
 
-    const school = await School.findById(schoolId).populate('users');
+    // Populate only students AND load their studentProfile
+    await school.populate({
+      path: 'users',
+      match: { role: 'student' },
+      populate: {
+        path: 'studentProfile'
+      }
+    });
+    const students = school.users || [];
 
-    if (!school) {
-      return res.status(404).json({ message: 'School not found' });
-    }
-
-    res.status(200).json({ users: school.users });
+    res.status(200).json({ students });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }

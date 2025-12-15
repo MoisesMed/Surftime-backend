@@ -10,6 +10,7 @@ const moment = require('moment-timezone');
 const { client, twilioPhoneNumber } = require('../config/twilioConfig');
 const messages = require('../resources/messages');
 const getSchoolObject = require('../utils/getSchoolObject');
+const generateSecurePassword = require('../utils/generateSecurePassword');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -137,41 +138,34 @@ exports.validateEmail = async (req, res) => {
 
 exports.requestPasswordReset = async (req, res) => {
   try {
-    const { phoneNumber } = req.body;
+    const { cpf, phoneNumber } = req.body;
 
     // Validate required fields
-    if (!phoneNumber) {
-      return res.status(400).json({ message: messages.pt.phoneNumberRequired,  error: error.message });
+    if (!cpf || !phoneNumber) {
+      return res.status(400).json({ message: messages.pt.missingRequiredFields,  error: error.message });
     }
 
     // find user with phone number
-    const user = await User.findOne({ phoneNumber });
+    const user = await User.findOne({ cpf, phoneNumber }).select("+password");
 
     if (!user) {
       return res.status(404).json({ message: messages.pt.userNotFound,  error: error.message });
     }
 
-    // generate a reset token
-    // const verificationCode = crypto.randomInt(100000, 999999).toString();
-    const verificationCode = "123456"
-    const resetTokenExpires = Date.now() + 3600000; // 1 hour
+    // Generate a new secure password
+    const newPassword = generateSecurePassword();
 
-    // save the reset token and expiration date to the user
-    user.resetToken = verificationCode;
-    user.resetTokenExpiration = resetTokenExpires;
+    // Hash and update password
+    user.password = newPassword;
     await user.save();
 
-    // Send SMS with Twilio
-    // await client.messages.create({
-    //   body: `Your password reset code is: ${verificationCode}`,
-    //   from: twilioPhoneNumber,
-    //   to: `+${user.phoneNumber}`,
-    // });
-
-    res.status(200).json({ message: messages.pt.passwordResetCode });
-
+    res.status(200).json({
+      message: messages.pt.passwordResetSuccess,
+      newPassword
+    });
   } catch (error) {
-    res.status(500).json({ message: messages.pt.internalServerError,  error: error.message });
+    console.error("Error resetting password:", error);
+    res.status(500).json({ message: messages.pt.internalServerError });
   }
 };
 

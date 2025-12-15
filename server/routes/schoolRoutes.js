@@ -20,7 +20,7 @@ router.patch('/', validateToken, requireAdmin, upload.single('logo'), updateScho
 router.get('/user', getSchoolDataForUser);
 
 // Get users of a specific school
-router.get('/:schoolId/users', validateToken, getSchoolUsers);
+router.get('/users', validateToken, requireAdmin, getSchoolUsers);
 
 // Create contracts (admin-only route)
 router.post('/contracts', validateToken, requireAdmin, createContracts);
