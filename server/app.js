@@ -35,10 +35,13 @@ app.use('/static', express.static(path.join(__dirname, 'public')));
 //   app.use(context);
 // }
 
-const allowedOrigins = [
-  'http://localhost:5173', // Development origin
-  'https://surftime-frontend.onrender.com', // Production origin
-];
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS ||
+  'http://localhost:5173,https://surftime-frontend.onrender.com,https://surf-time.vercel.app'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -46,14 +49,16 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     const isLocalhostSubdomain =
       /^https?:\/\/[a-z0-9-]+\.localhost(:\d+)?$/i.test(origin);
-    if (allowedOrigins.includes(origin) || isLocalhostSubdomain) {
+    const isVercelPreview =
+      /^https:\/\/(surf-time|surftime-frontend)(-[a-z0-9-]+)?\.vercel\.app$/i.test(origin);
+    if (allowedOrigins.includes(origin) || isLocalhostSubdomain || isVercelPreview) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Provision-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Provision-Key', 'X-Tenant'],
   credentials: true, // Allow credentials (e.g., cookies, authorization headers)
 };
 
