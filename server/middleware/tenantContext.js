@@ -79,35 +79,47 @@ module.exports = async function tenantContext(req, res, next) {
 
     const requestedSubdomain = parseSubdomain(req.headers.host);
     const localHost = isLocalHost(req.headers.host);
-    const fallbackSubdomain = localHost ? (process.env.DEFAULT_SUBDOMAIN || 'dosanjos') : null;
-    const tenantSubdomain = requestedSubdomain || fallbackSubdomain;
+    const fallbackSubdomain =
+      process.env.DEFAULT_SUBDOMAIN || (localHost ? 'dosanjos' : null);
+    const tenantCandidates = [
+      requestedSubdomain,
+      fallbackSubdomain,
+    ].filter(Boolean);
     console.log('[tenantContext]', {
       host: req.headers.host,
       requestedSubdomain,
       fallbackSubdomain,
-      tenantSubdomain,
+      tenantCandidates,
     });
 
-    if (!tenantSubdomain) {
+    if (!tenantCandidates.length) {
       return res.status(404).json({
         message: 'School not found',
         code: 'SCHOOL_NOT_FOUND',
       });
     }
 
-    let tenantDbName = tenantSubdomain;
-    let conn = await getConnection(baseUri, tenantDbName);
-    let activeSubdomain = tenantSubdomain;
+    let conn = null;
+    let activeSubdomain = null;
+    let tenantDbName = null;
 
-    const exists = await hasSchool(conn);
-    if (!exists) {
+    for (const candidate of [...new Set(tenantCandidates)]) {
+      const candidateConn = await getConnection(baseUri, candidate);
+      const exists = await hasSchool(candidateConn);
+      if (exists) {
+        conn = candidateConn;
+        activeSubdomain = candidate;
+        tenantDbName = candidate;
+        break;
+      }
+    }
+
+    if (!conn) {
       return res.status(404).json({
         message: 'School not found',
         code: 'SCHOOL_NOT_FOUND',
       });
     }
-    activeSubdomain = tenantSubdomain;
-    tenantDbName = tenantSubdomain;
 
     req.tenant = {
       subdomain: activeSubdomain,
