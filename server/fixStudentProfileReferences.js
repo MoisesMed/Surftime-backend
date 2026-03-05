@@ -1,16 +1,20 @@
 const mongoose = require('mongoose');
-const User = require('./models/User');
-const School = require('./models/School');
+const { getModels } = require('./models');
 
 // Connect to MongoDB
-const uri = 'mongodb+srv://leo:swqhfumAbTIbNDJ2@surftimeapp.c261d.mongodb.net/surftimeapp_dosanjossurfschool?retryWrites=true&w=majority&appName=surftimeapp';
+const uri = process.env.MONGODB_BASE_URI || process.env.MONGODB_URI;
+if (!uri) {
+  throw new Error('Missing MongoDB connection string in MONGODB_BASE_URI or MONGODB_URI');
+}
 
 mongoose.connect(uri)
-.then(() => console.log('Connected to MongoDB'))
-.catch((error) => console.error('Error connecting to MongoDB:', error));
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((error) => console.error('Error connecting to MongoDB:', error));
 
 async function fixSomethingInDatabase() {
   try {
+    const { User, School } = getModels(mongoose.connection);
+
     // Find the school by name or other criteria
     const school = await School.findOne({ name: 'Dos Anjos Surf School' });
     if (!school) {

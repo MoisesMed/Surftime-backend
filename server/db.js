@@ -2,8 +2,7 @@ const mongoose = require('mongoose');
 
 let isConnected;
 
-// Static MongoDB URI for development or testing
-const staticMongoDBURI = 'mongodb+srv://leo:swqhfumAbTIbNDJ2@surftimeapp.c261d.mongodb.net/surftimeapp_dosanjossurfschool?retryWrites=true&w=majority&appName=surftimeapp';
+const defaultDbName = process.env.MONGODB_DEFAULT_DB || 'dosanjos';
 async function connectToDatabase() {
   if (isConnected) {
     console.log('Using existing database connection');
@@ -11,9 +10,13 @@ async function connectToDatabase() {
   }
 
   try {
-    // Use the environment variable if available, otherwise use the static URI
-    const mongoDBURI = process.env.MONGODB_URI || staticMongoDBURI;
-    await mongoose.connect(mongoDBURI);
+    // Use the environment variables only (no hardcoded credentials)
+    const mongoDBURI =
+      process.env.MONGODB_BASE_URI || process.env.MONGODB_URI;
+    if (!mongoDBURI) {
+      throw new Error('Missing MongoDB connection string in MONGODB_BASE_URI or MONGODB_URI');
+    }
+    await mongoose.connect(mongoDBURI, { dbName: defaultDbName });
     isConnected = mongoose.connection.readyState;
     console.log('Connected to MongoDB Atlas');
   } catch (error) {

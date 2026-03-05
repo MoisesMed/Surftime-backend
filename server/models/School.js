@@ -13,6 +13,7 @@ const settingsSchema = new mongoose.Schema({
   cancellationPolicy: { type: Number, default: 12 }, // In hours
   bookingWindow: { type: Number, default: 8 }, // Hours before a lesson that a user can book
   numberOfStudentsPerLesson: { type: Number, default: 2 }, // Default number of students per class
+  templateInstructorIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   contracts: [contractSchema], // Array of embedded contract schemas
 });
 
@@ -25,8 +26,6 @@ const schoolSchema = new mongoose.Schema({
     lessons: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' }],
     settings: { type: settingsSchema, default: () => ({}) }, // Initialize with default values
     aboutUs: { type: String }
-  });
+  }, { collection: 'school' });
 
-const SchoolSchema = mongoose.model('School', schoolSchema);
-
-module.exports = SchoolSchema;
+module.exports = { name: 'School', schema: schoolSchema };

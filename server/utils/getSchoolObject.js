@@ -1,18 +1,17 @@
-const School = require("../models/School");
-const schoolConfig = require('../schoolConfig');
+async function getSchoolObject(models) {
+  try {
+    const { School } = models;
+    console.log('[getSchoolObject] model dbName:', School.db?.name);
+    const school = await School.findOne();
 
-async function getSchoolObject() {
-    try {
-        const school = await School.findOne({ name: schoolConfig.schoolName });
-        
-        if(!school){
-            throw new Error('School not found');
-        }
-        return school;
-    } catch (error) {
-        console.error(error);
-        throw error;
+    if (!school) {
+      throw new Error('School not found');
     }
+    return school;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 }
 
 module.exports = getSchoolObject;

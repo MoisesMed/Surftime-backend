@@ -1,7 +1,6 @@
-const User = require('../models/User');
-
 exports.validatePhoneNumber = async (req, res) => {
   try {
+    const { User } = req.models;
     const { phoneNumber } = req.query;
 
     if (!phoneNumber) {

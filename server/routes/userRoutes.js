@@ -10,6 +10,7 @@ const {
     requestPasswordReset,
     resetPassword,
     getAuthenticatedUserData,
+    changeAuthenticatedUserPassword,
     editUserInfo,
     getActiveNonExperimentalContracts,
     countActiveNonExperimentalContracts
@@ -26,7 +27,7 @@ router.post('/register', [
     body('password').isLength({ min: 8 }),
     body('phoneNumber').isLength({ min: 10 }),
     body('birthday').isISO8601(),
-    body('cpf').isLength({ min: 11 }),
+    body('cpf').optional({ checkFalsy: true }).isLength({ min: 11 }),
     (req, res, next) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -50,6 +51,7 @@ router.post('/reset-password', resetPassword);
 
 // Get authenticated user data
 router.get('/me', validateToken, getAuthenticatedUserData);
+router.patch('/me/change-password', validateToken, changeAuthenticatedUserPassword);
 
 // Get student lesson history
 router.get('/lesson-history', validateToken, getStudentLessonHistory);

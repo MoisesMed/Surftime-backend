@@ -1,3 +1,4 @@
 module.exports = {
-    schoolName: 'Dos Anjos Surf School',
-  };
+  schoolName: 'Dos Anjos Surf School',
+  defaultSubdomain: 'dosanjos',
+};

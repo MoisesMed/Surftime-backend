@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['student', 'instructor'], default: 'student', required: true},
   isAdmin: { type: Boolean, default: false },
+  owner: { type: Boolean, default: false },
   cpf: { type: String, unique: true, sparse: true }, //TODO: make cpf required
   birthday: { type: Date, required: true },
   observations: { type: String },
@@ -30,4 +31,4 @@ userSchema.pre('save', async function (next) {
   }
 });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = { name: 'User', schema: userSchema };

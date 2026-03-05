@@ -1,21 +1,13 @@
-const User = require('../models/User');
-const mongoose = require('mongoose');
-const StudentProfile = require('../models/StudentProfile');
-const School = require('../models/School');
-const Lesson = require('../models/Lesson');
-const bcrypt = require('bcrypt');
+﻿const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const moment = require('moment-timezone');
-const { client, twilioPhoneNumber } = require('../config/twilioConfig');
 const messages = require('../resources/messages');
 const getSchoolObject = require('../utils/getSchoolObject');
-const generateSecurePassword = require('../utils/generateSecurePassword');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.loginUser = async (req, res) => {
   try {
+    const { User } = req.models;
     const { phoneNumber, password } = req.body;
 
     const user = await User.findOne({ phoneNumber });
@@ -43,20 +35,25 @@ exports.loginUser = async (req, res) => {
 };
 
 exports.registerUser = async (req, res) => {
-  const session = await mongoose.startSession();
+  const { User, StudentProfile, School } = req.models;
+  const session = await User.db.startSession();
   session.startTransaction();
 
   try {
     const { fullName, email, cpf, birthday, phoneNumber, password } = req.body;
 
     // Validate required fields
-    if (!fullName || !email || !phoneNumber || !password || !cpf || !birthday) {
+    if (!fullName || !email || !phoneNumber || !password || !birthday) {
       return res.status(400).json({ message: messages.pt.allFieldsRequired });
     }
 
     // Check if a user with the same email or phone number already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { cpf }, { phoneNumber }],
+      $or: [
+        { email },
+        ...(cpf ? [{ cpf }] : []),
+        { phoneNumber },
+      ],
     });
 
     if (existingUser) {
@@ -68,7 +65,7 @@ exports.registerUser = async (req, res) => {
       fullName,
       email,
       phoneNumber,
-      cpf,
+      ...(cpf ? { cpf } : {}),
       birthday,
       password
     });
@@ -108,6 +105,7 @@ exports.registerUser = async (req, res) => {
 
 exports.getUsers = async (req, res) => {
   try {
+    const { User } = req.models;
     const users = await User.find().populate('studentProfile');
     res.status(200).json(users);
   } catch (error) {
@@ -117,6 +115,7 @@ exports.getUsers = async (req, res) => {
 
 exports.validateEmail = async (req, res) => {
   try {
+    const { User } = req.models;
     const { email } = req.query;
 
     // Validate required fields
@@ -138,39 +137,54 @@ exports.validateEmail = async (req, res) => {
 
 exports.requestPasswordReset = async (req, res) => {
   try {
-    const { cpf, phoneNumber } = req.body;
+    const { User } = req.models;
+    const { phoneNumber, birthday } = req.body;
 
     // Validate required fields
-    if (!cpf || !phoneNumber) {
-      return res.status(400).json({ message: messages.pt.missingRequiredFields,  error: error.message });
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'Numero de telefone obrigatorio.' });
     }
 
-    // find user with phone number
-    const user = await User.findOne({ cpf, phoneNumber }).select("+password");
+    const user = await User.findOne({ phoneNumber });
 
     if (!user) {
-      return res.status(404).json({ message: messages.pt.userNotFound,  error: error.message });
+      return res.status(404).json({ message: messages.pt.phoneNumberNotFound });
     }
 
-    // Generate a new secure password
-    const newPassword = generateSecurePassword();
+    if (!birthday) {
+      return res.status(400).json({ message: 'Data de nascimento obrigatoria.' });
+    }
 
-    // Hash and update password
-    user.password = newPassword;
+    const incomingBirthday = new Date(birthday);
+    if (Number.isNaN(incomingBirthday.getTime())) {
+      return res.status(400).json({ message: 'Data de nascimento inválida.' });
+    }
+
+    const userBirthday = new Date(user.birthday);
+    const sameDate =
+      userBirthday.getUTCFullYear() === incomingBirthday.getUTCFullYear() &&
+      userBirthday.getUTCMonth() === incomingBirthday.getUTCMonth() &&
+      userBirthday.getUTCDate() === incomingBirthday.getUTCDate();
+
+    if (!sameDate) {
+      return res.status(400).json({ message: 'Data de nascimento não confere.' });
+    }
+
+    user.password = 'suasenha';
     await user.save();
 
     res.status(200).json({
-      message: messages.pt.passwordResetSuccess,
-      newPassword
+      message: 'Senha redefinida para suasenha. Faca login e altere em seguida.',
     });
   } catch (error) {
-    console.error("Error resetting password:", error);
+    console.error('Erro ao redefinir senha:', error);
     res.status(500).json({ message: messages.pt.internalServerError });
   }
 };
 
 exports.resetPassword = async (req, res) => {
   try {
+    const { User } = req.models;
     const { phoneNumber, verificationCode, newPassword } = req.body;
 
     // find the user with the reset token and check if it has expired, only use twillo verification code when you want to test the logic.
@@ -198,6 +212,7 @@ exports.resetPassword = async (req, res) => {
 // Get student lesson history
 exports.getStudentLessonHistory = async (req, res) => {
   try {
+    const { User, Lesson } = req.models;
     const studentId = req.user.id; // Get the student ID from the authenticated user
 
     // Retrieve the user's profile with the studentProfile populated
@@ -222,6 +237,7 @@ exports.getStudentLessonHistory = async (req, res) => {
 // Get authenticated user data
 exports.getAuthenticatedUserData = async (req, res) => {
   try {
+    const { User, Lesson } = req.models;
     const userId = req.user.id; // Get the user ID from the authenticated user
 
     // Find the user and populate related fields
@@ -243,9 +259,53 @@ exports.getAuthenticatedUserData = async (req, res) => {
   }
 };
 
+// Change authenticated user password
+exports.changeAuthenticatedUserPassword = async (req, res) => {
+  try {
+    const { User } = req.models;
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Senha atual e nova senha sao obrigatorias' });
+    }
+
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ message: 'A nova senha deve ter ao menos 8 caracteres' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'A nova senha deve ser diferente da senha atual' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      String(currentPassword),
+      user.password
+    );
+
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ message: 'Senha atual inválida' });
+    }
+
+    user.password = String(newPassword);
+    await user.save();
+
+    return res.status(200).json({ message: 'Senha alterada com sucesso' });
+  } catch (error) {
+    console.error('Error changing authenticated user password:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
 // Edit user information (admin-only)
 exports.editUserInfo = async (req, res) => {
   try {
+    const { User } = req.models;
     const { userId } = req.params;
     const { role, isAdmin, status } = req.body;
 
@@ -283,6 +343,7 @@ exports.editUserInfo = async (req, res) => {
 // Assign a contract to a student (admin-only)
 exports.assignContractToStudent = async (req, res) => {
   try {
+    const { User } = req.models;
     const { userId } = req.params;
     const { contractType } = req.body; // Get contract type from request body
 
@@ -292,7 +353,7 @@ exports.assignContractToStudent = async (req, res) => {
       return res.status(404).json({ message: 'User or student profile not found' });
     }
 
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
 
     // Find the contract within the school's settings
     const contract = school.settings.contracts.find(c => c.type === contractType);
@@ -319,13 +380,14 @@ exports.assignContractToStudent = async (req, res) => {
 
 exports.getActiveNonExperimentalContracts = async (req, res) => {
   try {
+    const { StudentProfile } = req.models;
     // Query for active student profiles with a contract that is not "experimental"
     const studentProfiles = await StudentProfile.find({
       status: 'active',
       contract: { $exists: true },
     }).populate('user'); // Populate the user field to get user details
 
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
 
     // Filter out students with the "experimental" contract
     const studentsData = studentProfiles
@@ -354,7 +416,8 @@ exports.getActiveNonExperimentalContracts = async (req, res) => {
 
 exports.countActiveNonExperimentalContracts = async (req, res) => {
   try {
-    const school = await getSchoolObject();
+    const { StudentProfile } = req.models;
+    const school = await getSchoolObject(req.models);
 
     // Get the IDs of non-experimental contracts
     const nonExperimentalContractIds = school.settings.contracts

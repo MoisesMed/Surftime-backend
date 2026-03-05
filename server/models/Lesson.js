@@ -12,6 +12,4 @@ const lessonSchema = new mongoose.Schema({
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true }
 });
 
-const LessonSchema = mongoose.model('Lesson', lessonSchema);
-
-module.exports = LessonSchema;
+module.exports = { name: 'Lesson', schema: lessonSchema };

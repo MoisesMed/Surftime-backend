@@ -7,4 +7,4 @@ const instructorProfileSchema = new mongoose.Schema({
   futureLessons: { type: Number, default: 0 }, // Number of lessons the instructor is assigned to in the future
 });
 
-module.exports = mongoose.model('InstructorProfile', instructorProfileSchema);
+module.exports = { name: 'InstructorProfile', schema: instructorProfileSchema };

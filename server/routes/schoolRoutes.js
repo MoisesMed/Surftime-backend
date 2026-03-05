@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { createSchool, getSchoolUsers, getSchoolData, updateSchool, createContracts, getSchoolDataForUser, getDefaultData, getAboutUs, updateAboutUs } = require('../controllers/schoolController');
+const { createSchool, getSchoolUsers, getSchoolData, updateSchool, createContracts, getSchoolDataForUser, getDefaultData, getAboutUs, updateAboutUs, provisionSchool } = require('../controllers/schoolController');
 const validateToken = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -9,6 +9,9 @@ const upload = multer({ dest: 'uploads/' }); // Temporary storage for uploaded f
 
 // Create a new school (admin-only route)
 router.post('/create', validateToken, requireAdmin, createSchool);
+
+// Provision a new school and database (protected by PROVISION_KEY)
+router.post('/provision', provisionSchool);
 
 // Get school data (admin-only route)
 router.get('/', validateToken, requireAdmin, getSchoolData);

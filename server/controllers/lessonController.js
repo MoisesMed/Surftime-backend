@@ -1,7 +1,4 @@
-const mongoose = require('mongoose');
-const Lesson = require('../models/Lesson');
-const User = require('../models/User');
-const getSchoolObject = require('../utils/getSchoolObject');
+﻿const getSchoolObject = require('../utils/getSchoolObject');
 const messages = require('../resources/messages');
 const moment = require('moment-timezone');
 const { calculateRemainingCredits } = require('../utils/creditsUtils');
@@ -27,13 +24,14 @@ async function sendNotification(userId, payload) {
 // Get all lessons by date
 exports.getLessonsByDate = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const { date } = req.params;
 
     if(!date) {
-      return res.status(400).json({ message: 'Missing required fields' });
+      return res.status(400).json({ message: 'Campos obrigatórios ausentes' });
     }
 
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
     const schoolId = school._id;
 
     // Validate required fields
@@ -50,7 +48,9 @@ exports.getLessonsByDate = async (req, res) => {
     // Find lessons for the specified day
     const lessons = await Lesson.find({
       startTime: { $gte: startOfDay.toDate(), $lte: endOfDay.toDate() },
-    });
+    })
+      .populate('instructors', '_id fullName')
+      .populate('students', '_id fullName');
 
     res.status(200).json({ lessons });
   } catch (error) {
@@ -60,17 +60,18 @@ exports.getLessonsByDate = async (req, res) => {
 
 exports.assignInstructor = async (req, res) => {
   try {
+    const { Lesson, User } = req.models;
     const { lessonId } = req.params;
     const { instructorId } = req.body;
 
     const lessonObj = await Lesson.findById(lessonId);
     if (!lessonObj) {
-      return res.status(404).json({ message: 'Lesson not found' });
+      return res.status(404).json({ message: 'Aula não encontrada' });
     }
 
     const instructorObj = await User.findById(instructorId);
     if (!instructorObj || instructorObj.role !== 'instructor') {
-      return res.status(400).json({ message: 'Invalid instructor ID' });
+      return res.status(400).json({ message: 'ID de professor inválido' });
     }
 
     // Assign the instructor to the lesson
@@ -83,22 +84,23 @@ exports.assignInstructor = async (req, res) => {
     // };
     // await sendNotification(instructorId, lessonDetails);
 
-    res.status(200).json({ message: 'Instructor assigned successfully', lesson });
+    res.status(200).json({ message: 'Professor atribuído com sucesso', lesson });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 }
 
 // Assign an instructor to multiple lessons (admin-only)
 exports.assignInstructorToLessons = async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await req.models.Lesson.db.startSession();
   session.startTransaction();
   try {
+    const { Lesson } = req.models;
     const { instructorId, lessonIds } = req.body; // Get instructor ID and lesson IDs from request body
 
     // Validate input
     if (!instructorId || !lessonIds || !Array.isArray(lessonIds)) {
-      return res.status(400).json({ message: 'Invalid input' });
+      return res.status(400).json({ message: 'Entrada inválida' });
     }
 
     // Assign the instructor to each lesson
@@ -121,21 +123,22 @@ exports.assignInstructorToLessons = async (req, res) => {
     // };
     // await sendNotification(instructorId, lessonDetails);
 
-    res.status(200).json({ message: 'Instructor assigned to lessons successfully', lessons });
+    res.status(200).json({ message: 'Professor atribuído às aulas com sucesso', lessons });
   } catch (error) {
     // Abort the transaction in case of error
     await session.abortTransaction();
     session.endSession();
     console.error('Error assigning instructor to lessons:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 };
 
 // Remove an instructor from a lesson (admin-only)
 exports.removeInstructorFromLesson = async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await req.models.Lesson.db.startSession();
   session.startTransaction();
   try {
+    const { Lesson } = req.models;
     const { lessonId } = req.params;
     const { instructorId } = req.body; // Get instructor ID from request body
 
@@ -143,7 +146,7 @@ exports.removeInstructorFromLesson = async (req, res) => {
     const lesson = await Lesson.findById(lessonId).session(session);
 
     if (!lesson) {
-      return res.status(404).json({ message: 'Lesson not found' });
+      return res.status(404).json({ message: 'Aula não encontrada' });
     }
 
     // Remove the instructor from the lesson
@@ -154,19 +157,20 @@ exports.removeInstructorFromLesson = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    res.status(200).json({ message: 'Instructor removed successfully', lesson });
+    res.status(200).json({ message: 'Professor removido com sucesso', lesson });
   } catch (error) {
     // Abort the transaction in case of error
     await session.abortTransaction();
     session.endSession();
     console.error('Error removing instructor:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 };
 
 // Get all lessons for a specific instructor
 exports.getLessonsByInstructor = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const { instructorId } = req.params;
 
     // Find lessons where the instructor is assigned
@@ -177,18 +181,19 @@ exports.getLessonsByInstructor = async (req, res) => {
     res.status(200).json({ lessons });
   } catch (error) {
     console.error('Error retrieving lessons by instructor:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 };
 
 exports.bookLesson = async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await req.models.Lesson.db.startSession();
   session.startTransaction();
 
   try {
+    const { Lesson, User, StudentProfile } = req.models;
     const { lessonId } = req.params;
     const studentId = req.user.id; //authenticated user 
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
     const { timeZone, bookingWindow } = school.settings;
 
     const lesson = await Lesson.findById(lessonId).session(session);
@@ -207,16 +212,16 @@ exports.bookLesson = async (req, res) => {
     console.log('Hours Difference:', hoursDifference);
     
     if (hoursDifference <= 0 ) {
-      return res.status(400).json({ message: 'Cannot book a lesson that is in the past or currently ongoing' });
+      return res.status(400).json({ message: 'Não é possível agendar aula no passado ou já em andamento' });
     }
 
     if (hoursDifference < bookingWindow) {
-      return res.status(400).json({ message: `Cannot book a lesson less than ${bookingWindow} hours before it starts` });
+      return res.status(400).json({ message: `Não é possível agendar aula com menos de ${bookingWindow} horas de antecedência` });
     }
 
     // Check if the lesson is in the past
     if (lesson.startTime <= now) {
-      return res.status(400).json({ message: 'Cannot book a lesson that is in the past' });
+      return res.status(400).json({ message: 'Não é possível agendar aula no passado' });
     }
 
     // Check if the student is already booked
@@ -231,17 +236,25 @@ exports.bookLesson = async (req, res) => {
 
     // Retrieve the user's profile with the studentProfile populated
     const user = await User.findById(studentId).populate('studentProfile').session(session);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario não encontrado' });
+    }
 
-    if (!user.studentProfile) {
-      return res.status(400).json({ message: 'Student profile not found' });
+    // Garante perfil de aluno para contas antigas/inconsistentes.
+    let studentProfile = user.studentProfile;
+    if (!studentProfile) {
+      const createdProfiles = await StudentProfile.create([{ user: user._id }], { session });
+      studentProfile = createdProfiles[0];
+      user.studentProfile = studentProfile._id;
+      await user.save({ session });
     }
 
     // Calculate remaining credits
-    const remainingCredits = calculateRemainingCredits(user.studentProfile);
+    const remainingCredits = calculateRemainingCredits(studentProfile);
 
     // Check if the contract has expired
-    if (user.studentProfile.contractExpiration && new Date() > user.studentProfile.contractExpiration) {
-      return res.status(400).json({ message: 'Contract has expired' });
+    if (studentProfile.contractExpiration && new Date() > studentProfile.contractExpiration) {
+      return res.status(400).json({ message: 'Contrato expirado' });
     }
 
     // Check if the student has remaining lessons
@@ -255,9 +268,9 @@ exports.bookLesson = async (req, res) => {
     await lesson.save({ session });
 
     // Update the student's lesson history and lesson counts
-    user.studentProfile.lessonHistory.push(lessonId);
-    user.studentProfile.usedCredits += 1;
-    await user.studentProfile.save({ session });
+    studentProfile.lessonHistory.push(lessonId);
+    studentProfile.usedCredits += 1;
+    await studentProfile.save({ session });
 
     // Commit the transaction
     await session.commitTransaction();
@@ -273,9 +286,10 @@ exports.bookLesson = async (req, res) => {
 }
 
 exports.cancelBooking = async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await req.models.Lesson.db.startSession();
   session.startTransaction();
   try {
+    const { Lesson, User, StudentProfile } = req.models;
     const { lessonId } = req.params;
     const studentId = req.user.id; //authenticated user 
 
@@ -286,7 +300,7 @@ exports.cancelBooking = async (req, res) => {
     }
 
     // Retrieve the school's time zone from the lesson
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
     const { timeZone, cancellationPolicy } = school.settings;
 
     // Check if the cancellation is less than 12 hours before the lesson starts
@@ -303,50 +317,62 @@ exports.cancelBooking = async (req, res) => {
 
     // Update the student's lesson history and lesson counts
     const user = await User.findById(studentId).populate('studentProfile').session(session);
-   
-    if (!user.studentProfile) {
-      return res.status(400).json({ message: 'Student profile not found' });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario não encontrado' });
     }
 
-    user.studentProfile.lessonHistory = user.studentProfile.lessonHistory.filter(lesson => lesson.toString() !== lessonId);
-    user.studentProfile.usedCredits -= 1;
-    await user.studentProfile.save({ session });
+    // Garante perfil de aluno para contas antigas/inconsistentes.
+    let studentProfile = user.studentProfile;
+    if (!studentProfile) {
+      const createdProfiles = await StudentProfile.create([{ user: user._id }], { session });
+      studentProfile = createdProfiles[0];
+      user.studentProfile = studentProfile._id;
+      await user.save({ session });
+    }
+
+    studentProfile.lessonHistory = studentProfile.lessonHistory.filter(lesson => lesson.toString() !== lessonId);
+    studentProfile.usedCredits = Math.max(0, (studentProfile.usedCredits || 0) - 1);
+    await studentProfile.save({ session });
 
     // Commit the transaction
     await session.commitTransaction();
     session.endSession();
 
-    res.status(200).json({ message: 'Booking cancelled successfully', lesson });
+    res.status(200).json({ message: 'Reserva cancelada com sucesso', lesson });
   } catch (error) {
     // Abort the transaction in case of error
     await session.abortTransaction();
     session.endSession();
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 }
 
 exports.getAssignedLessonsByInstructor = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const instructorId = req.user.id; //authenticated user 
 
     if (req.user.role !== 'instructor') {
-      return res.status(400).json({ message: 'Invalid instructor' });
+      return res.status(400).json({ message: 'Professor inválido' });
     }
 
     const lessons = await Lesson.find({ instructors: instructorId }).populate('instructors students');
 
     res.status(200).json(lessons);
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 }
 
 exports.getSchoolLessons = async (req, res) => {
   try {
-    const school = await getSchoolObject();
+    const { Lesson } = req.models;
+    const school = await getSchoolObject(req.models);
     const schoolId = school._id;
     
-    const lessons = await Lesson.find({ school: schoolId });
+    const lessons = await Lesson.find({ school: schoolId })
+      .populate('instructors', '_id fullName')
+      .populate('students', '_id fullName');
 
     res.status(200).json(lessons);
   } catch (error) {
@@ -357,6 +383,7 @@ exports.getSchoolLessons = async (req, res) => {
 // Get the next lesson booked by the authenticated student
 exports.getNextLessonByStudent = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const studentId = req.user.id; // Get the student ID from the authenticated user
 
     // Log the current date for debugging
@@ -373,13 +400,13 @@ exports.getNextLessonByStudent = async (req, res) => {
       .populate('instructors students');
 
     if (!nextLesson) {
-      return res.status(404).json({ message: 'No upcoming lessons found' });
+      return res.status(404).json({ message: 'Nenhuma aula futura encontrada' });
     }
 
     res.status(200).json({ nextLesson });
   } catch (error) {
     console.error('Error retrieving next lesson:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 }
 
@@ -388,10 +415,11 @@ exports.getNextLessonByStudent = async (req, res) => {
 // Create all lessons for a specific day (admin-only)
 exports.createLessonsForDay = async (req, res) => {
   try {
+    const { Lesson } = req.models;
 
     const { date, location, studentLimit } = req.body;
 
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
     const schoolId = school._id;
 
     // Validate required fields
@@ -425,7 +453,7 @@ exports.createLessonsForDay = async (req, res) => {
     // Save all lessons to the database
     await Lesson.insertMany(lessons);
 
-    res.status(201).json({ message: 'Lessons created successfully', lessons });
+    res.status(201).json({ message: 'Aulas criadas com sucesso', lessons });
   } catch (error) {
     res.status(500).json({ message: messages.pt.internalServerError, error: error.message });
   }
@@ -433,14 +461,15 @@ exports.createLessonsForDay = async (req, res) => {
 
 exports.createLesson = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const lessons = req.body;
 
     // Validate required fields
     if (!lessons || !Array.isArray(lessons)) {
-      return res.status(400).json({ message: 'Invalid input' });
+      return res.status(400).json({ message: 'Entrada inválida' });
     }
 
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
     const schoolId = school._id;
     const { lessonDuration, timeZone } = school.settings;
 
@@ -450,7 +479,7 @@ exports.createLesson = async (req, res) => {
         const {startTime, endTime, location, studentLimit , instructors} = lessonData;
           
         if (!startTime || !endTime || !location || !studentLimit) {
-          return res.status(400).json({ message: 'Missing required fields' });
+          return res.status(400).json({ message: 'Campos obrigatórios ausentes' });
         }
         
         // Create a moment object for the start time in the specified time zone
@@ -479,14 +508,15 @@ exports.createLesson = async (req, res) => {
         await newLesson.save();
         createdLessons.push(newLesson);
       }
-    res.status(201).json({ message: 'Lesson created successfully', lesson: createdLessons });
+    res.status(201).json({ message: 'Aula criada com sucesso', lesson: createdLessons });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 }
 
 exports.editLesson = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const { lessonId } = req.params;
     const updateData = req.body; // Get update data from request body
 
@@ -494,36 +524,40 @@ exports.editLesson = async (req, res) => {
     const updatedLesson = await Lesson.findByIdAndUpdate(lessonId, updateData, { new: true });
 
     if (!updatedLesson) {
-      return res.status(404).json({ message: 'Lesson not found' });
+      return res.status(404).json({ message: 'Aula não encontrada' });
     }
 
-    res.status(200).json({ message: 'Lesson updated successfully', lesson: updatedLesson });
+    res.status(200).json({ message: 'Aula atualizada com sucesso', lesson: updatedLesson });
   } catch (error) {
     console.error('Error updating lesson:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 };
 
 exports.getBookedLessonsPerStudent = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const studentId = req.user.id; // Get the student ID from the authenticated user
 
     // Find lessons where the authenticated user is booked
     const lessons = await Lesson.find({
       students: studentId,
-    });
+    })
+      .populate('instructors', '_id fullName')
+      .populate('students', '_id fullName');
 
     res.status(200).json({ lessons });
   } catch (error) {
     console.error('Error retrieving booked lessons per student:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 };
 
 exports.getTodaysLessonsByStudent = async (req, res) => {
   try {
+    const { Lesson } = req.models;
     const studentId = req.user.id; // Get the student ID from the authenticated user
-    const school = await getSchoolObject();
+    const school = await getSchoolObject(req.models);
     const { timeZone } = school.settings;
 
     // Get the start and end of the current day in the specified time zone
@@ -537,11 +571,31 @@ exports.getTodaysLessonsByStudent = async (req, res) => {
     }).populate('instructors students');
 
     if (!todayLesson) {
-      return res.status(404).json({ message: 'No lessons found for today' });
+      return res.status(404).json({ message: 'Nenhuma aula encontrada para hoje' });
     }
 
     res.status(200).json({ todayLesson });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
 };
+
+// Delete lesson (admin-only)
+exports.deleteLesson = async (req, res) => {
+  try {
+    const { Lesson } = req.models;
+    const { lessonId } = req.params;
+
+    const deletedLesson = await Lesson.findByIdAndDelete(lessonId);
+    if (!deletedLesson) {
+      return res.status(404).json({ message: 'Aula não encontrada' });
+    }
+
+    res.status(200).json({ message: 'Aula removida com sucesso' });
+  } catch (error) {
+    console.error('Error deleting lesson:', error);
+    res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
+  }
+};
+
+

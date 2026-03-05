@@ -14,7 +14,8 @@ const {
     getLessonsByDate,
     createLessonsForDay,
     getNextLessonByStudent,
-    editLesson
+    editLesson,
+    deleteLesson
 } = require('../controllers/lessonController');
 const requireAuth = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
@@ -65,5 +66,7 @@ router.post('/:lessonId/cancel-booking', requireAuth, cancelBooking);
 
 // Edit lesson
 router.patch('/:lessonId', requireAuth, requireAdmin, editLesson);
+// Delete lesson
+router.delete('/:lessonId', requireAuth, requireAdmin, deleteLesson);
 
 module.exports = router;

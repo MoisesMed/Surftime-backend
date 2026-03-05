@@ -10,4 +10,4 @@ const studentProfileSchema = new mongoose.Schema({
   lessonHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' }], 
 });
 
-module.exports = mongoose.model('StudentProfile', studentProfileSchema);
+module.exports = { name: 'StudentProfile', schema: studentProfileSchema };
