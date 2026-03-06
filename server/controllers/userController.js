@@ -1,5 +1,7 @@
 ﻿const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const moment = require('moment');
+const cloudinary = require('../config/cloudinaryConfig');
 const messages = require('../resources/messages');
 const getSchoolObject = require('../utils/getSchoolObject');
 
@@ -142,7 +144,7 @@ exports.requestPasswordReset = async (req, res) => {
 
     // Validate required fields
     if (!phoneNumber) {
-      return res.status(400).json({ message: 'Numero de telefone obrigatorio.' });
+      return res.status(400).json({ message: 'Número de telefone obrigatório.' });
     }
 
     const user = await User.findOne({ phoneNumber });
@@ -152,7 +154,7 @@ exports.requestPasswordReset = async (req, res) => {
     }
 
     if (!birthday) {
-      return res.status(400).json({ message: 'Data de nascimento obrigatoria.' });
+      return res.status(400).json({ message: 'Data de nascimento obrigatória.' });
     }
 
     const incomingBirthday = new Date(birthday);
@@ -174,7 +176,7 @@ exports.requestPasswordReset = async (req, res) => {
     await user.save();
 
     res.status(200).json({
-      message: 'Senha redefinida para suasenha. Faca login e altere em seguida.',
+      message: 'Senha redefinida para suasenha. Faça login e altere em seguida.',
     });
   } catch (error) {
     console.error('Erro ao redefinir senha:', error);
@@ -259,6 +261,52 @@ exports.getAuthenticatedUserData = async (req, res) => {
   }
 };
 
+
+exports.updateAuthenticatedUserData = async (req, res) => {
+  try {
+    const { User } = req.models;
+    const userId = req.user.id;
+    const { fullName, email, birthday, cpf } = req.body;
+
+    const user = await User.findById(userId).populate('studentProfile');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (typeof fullName === 'string') user.fullName = fullName.trim();
+    if (typeof email === 'string') user.email = email.trim();
+    if (birthday !== undefined) user.birthday = birthday || null;
+
+    if (cpf !== undefined) {
+      if (cpf === null || cpf === '' || String(cpf).toLowerCase() === 'null') {
+        user.cpf = undefined;
+      } else {
+        user.cpf = String(cpf).replace(/\D/g, '');
+      }
+    }
+
+    if (req.file) {
+      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+        public_id: `user_${userId}_profile`,
+        transformation: { width: 256, height: 256, crop: 'fill', gravity: 'face' },
+      });
+      user.profileImageUrl = uploadResult.secure_url;
+    }
+
+    await user.save();
+
+    const userObject = user.toObject();
+    delete userObject.password;
+
+    return res.status(200).json({
+      message: 'Perfil atualizado com sucesso',
+      user: userObject,
+    });
+  } catch (error) {
+    console.error('Error updating authenticated user:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
 // Change authenticated user password
 exports.changeAuthenticatedUserPassword = async (req, res) => {
   try {
@@ -267,7 +315,7 @@ exports.changeAuthenticatedUserPassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Senha atual e nova senha sao obrigatorias' });
+      return res.status(400).json({ message: 'Senha atual e nova senha são obrigatórias' });
     }
 
     if (String(newPassword).length < 8) {
@@ -305,9 +353,19 @@ exports.changeAuthenticatedUserPassword = async (req, res) => {
 // Edit user information (admin-only)
 exports.editUserInfo = async (req, res) => {
   try {
-    const { User } = req.models;
+    const { User, StudentProfile } = req.models;
     const { userId } = req.params;
-    const { role, isAdmin, status } = req.body;
+    const {
+      fullName,
+      email,
+      phoneNumber,
+      cpf,
+      birthday,
+      role,
+      isAdmin,
+      status,
+      totalCredits,
+    } = req.body;
 
     // Find the user by ID
     const user = await User.findById(userId).populate('studentProfile');
@@ -316,18 +374,47 @@ exports.editUserInfo = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update user fields
-    if (role) user.role = role;
-    if (role === "instructor"){
-      //delete user.studentProfile;
-      user.studentProfile = undefined;
+    // Update basic user fields
+    if (typeof fullName === 'string') user.fullName = fullName.trim();
+    if (typeof email === 'string') user.email = email.trim();
+    if (typeof phoneNumber === 'string') user.phoneNumber = phoneNumber.trim();
+    if (birthday) user.birthday = birthday;
+    if (cpf === null || cpf === '') {
+      user.cpf = undefined;
+    } else if (typeof cpf === 'string') {
+      user.cpf = cpf.trim();
     }
+
+    // Update role flags
+    if (role) user.role = role;
     if (typeof isAdmin === 'boolean') user.isAdmin = isAdmin;
 
-    // Update student profile fields if the user is a student
+    // Ensure student profile exists for student users
+    if (user.role === 'student' && !user.studentProfile) {
+      const createdProfile = new StudentProfile({ user: user._id });
+      await createdProfile.save();
+      user.studentProfile = createdProfile._id;
+      await user.populate('studentProfile');
+    }
+
+    // Update student profile fields
     if (user.studentProfile) {
       if (status) user.studentProfile.status = status;
+      if (totalCredits !== undefined) {
+        const parsedCredits = Number(totalCredits);
+        const nextCredits = Number.isNaN(parsedCredits)
+          ? user.studentProfile.totalCredits
+          : Math.max(0, Math.floor(parsedCredits));
+        user.studentProfile.totalCredits = nextCredits;
+        if (user.studentProfile.usedCredits > nextCredits) {
+          user.studentProfile.usedCredits = nextCredits;
+        }
+      }
       await user.studentProfile.save();
+    } else if (totalCredits !== undefined) {
+      return res.status(400).json({
+        message: 'Este usuário não possui perfil de aluno para receber créditos.',
+      });
     }
 
     // Save the updated user
@@ -435,3 +522,7 @@ exports.countActiveNonExperimentalContracts = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+
+
+

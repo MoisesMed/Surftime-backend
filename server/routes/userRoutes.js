@@ -1,4 +1,7 @@
 const express = require('express');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const { body, validationResult } = require('express-validator');
 const {
     assignContractToStudent,
@@ -10,6 +13,7 @@ const {
     requestPasswordReset,
     resetPassword,
     getAuthenticatedUserData,
+    updateAuthenticatedUserData,
     changeAuthenticatedUserPassword,
     editUserInfo,
     getActiveNonExperimentalContracts,
@@ -17,6 +21,18 @@ const {
 } = require('../controllers/userController');
 const validateToken = require('../middleware/validateToken');
 const requireAdmin = require('../middleware/requireAdmin');
+const uploadDir = path.join(__dirname, '..', 'uploads');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const safeName = `${Date.now()}-${(file.originalname || 'profile').replace(/\s+/g, '_')}`;
+    cb(null, safeName);
+  },
+});
+const upload = multer({ storage });
 
 const router = express.Router();
 
@@ -51,6 +67,7 @@ router.post('/reset-password', resetPassword);
 
 // Get authenticated user data
 router.get('/me', validateToken, getAuthenticatedUserData);
+router.patch('/me', validateToken, upload.single('profileImage'), updateAuthenticatedUserData);
 router.patch('/me/change-password', validateToken, changeAuthenticatedUserPassword);
 
 // Get student lesson history
