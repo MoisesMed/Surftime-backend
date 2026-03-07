@@ -4,6 +4,7 @@ const moment = require('moment');
 const cloudinary = require('../config/cloudinaryConfig');
 const messages = require('../resources/messages');
 const getSchoolObject = require('../utils/getSchoolObject');
+const { buildPhoneCandidates, normalizePhoneNumber } = require('../utils/phoneNumber');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -12,7 +13,8 @@ exports.loginUser = async (req, res) => {
     const { User } = req.models;
     const { phoneNumber, password } = req.body;
 
-    const user = await User.findOne({ phoneNumber });
+    const phoneCandidates = buildPhoneCandidates(phoneNumber);
+    const user = await User.findOne({ phoneNumber: { $in: phoneCandidates } });
     if (!user) {
       return res.status(400).json({ message: messages.pt.phoneNumberNotFound });
     }
@@ -43,18 +45,23 @@ exports.registerUser = async (req, res) => {
 
   try {
     const { fullName, email, cpf, birthday, phoneNumber, password } = req.body;
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
 
     // Validate required fields
     if (!fullName || !email || !phoneNumber || !password || !birthday) {
       return res.status(400).json({ message: messages.pt.allFieldsRequired });
     }
+    if (!normalizedPhoneNumber) {
+      return res.status(400).json({ message: 'Número de telefone inválido.' });
+    }
 
     // Check if a user with the same email or phone number already exists
+    const phoneCandidates = buildPhoneCandidates(phoneNumber);
     const existingUser = await User.findOne({
       $or: [
         { email },
         ...(cpf ? [{ cpf }] : []),
-        { phoneNumber },
+        { phoneNumber: { $in: phoneCandidates } },
       ],
     });
 
@@ -66,7 +73,7 @@ exports.registerUser = async (req, res) => {
     const newUser = new User({
       fullName,
       email,
-      phoneNumber,
+      phoneNumber: normalizedPhoneNumber,
       ...(cpf ? { cpf } : {}),
       birthday,
       password
@@ -141,13 +148,14 @@ exports.requestPasswordReset = async (req, res) => {
   try {
     const { User } = req.models;
     const { phoneNumber, birthday } = req.body;
+    const phoneCandidates = buildPhoneCandidates(phoneNumber);
 
     // Validate required fields
     if (!phoneNumber) {
       return res.status(400).json({ message: 'Número de telefone obrigatório.' });
     }
 
-    const user = await User.findOne({ phoneNumber });
+    const user = await User.findOne({ phoneNumber: { $in: phoneCandidates } });
 
     if (!user) {
       return res.status(404).json({ message: messages.pt.phoneNumberNotFound });
@@ -188,10 +196,11 @@ exports.resetPassword = async (req, res) => {
   try {
     const { User } = req.models;
     const { phoneNumber, verificationCode, newPassword } = req.body;
+    const phoneCandidates = buildPhoneCandidates(phoneNumber);
 
     // find the user with the reset token and check if it has expired, only use twillo verification code when you want to test the logic.
     const user = await User.findOne({
-      phoneNumber,
+      phoneNumber: { $in: phoneCandidates },
       resetToken: verificationCode,
       resetTokenExpiration: { $gt: Date.now() }
     });
@@ -377,7 +386,13 @@ exports.editUserInfo = async (req, res) => {
     // Update basic user fields
     if (typeof fullName === 'string') user.fullName = fullName.trim();
     if (typeof email === 'string') user.email = email.trim();
-    if (typeof phoneNumber === 'string') user.phoneNumber = phoneNumber.trim();
+    if (typeof phoneNumber === 'string') {
+      const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+      if (!normalizedPhoneNumber) {
+        return res.status(400).json({ message: 'Número de telefone inválido.' });
+      }
+      user.phoneNumber = normalizedPhoneNumber;
+    }
     if (birthday) user.birthday = birthday;
     if (cpf === null || cpf === '') {
       user.cpf = undefined;
