@@ -5,6 +5,7 @@ const modelDefs = [
   require('./School'),
   require('./Lesson'),
   require('./Feedback'),
+  require('./AuditLog'),
 ];
 
 function getModels(conn) {

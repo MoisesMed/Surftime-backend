@@ -1,4 +1,4 @@
-const { buildPhoneCandidates } = require('../utils/phoneNumber');
+const { buildPhoneCandidates, findUserByPhone } = require('../utils/phoneNumber');
 
 exports.validatePhoneNumber = async (req, res) => {
   try {
@@ -13,7 +13,7 @@ exports.validatePhoneNumber = async (req, res) => {
     if (phoneCandidates.length === 0) {
       return res.status(400).json({ message: 'Invalid phone number' });
     }
-    const user = await User.findOne({ phoneNumber: { $in: phoneCandidates } });
+    const user = await findUserByPhone(User, phoneNumber);
 
     if (user) {
       return res.status(200).json({ exists: true, message: 'Phone number already exists' });

@@ -15,11 +15,14 @@ const adminRoutes = require('./routes/adminRoutes');
 const validateHttps = require('./middleware/validateHttps');
 const context = require('./middleware/context');
 const tenantContext = require('./middleware/tenantContext');
+const requestLogger = require('./middleware/requestLogger');
+const errorHandler = require('./middleware/errorHandler');
 const helmet = require('helmet')
 
 const app = express();
 app.use(express.json());
 app.use(helmet());
+app.use(requestLogger);
 // app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 app.use(helmet.contentSecurityPolicy({
   directives: {
@@ -82,6 +85,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/', (req, res) => {
   res.send('Hello, welcome to the surftime API!');
 });
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3005;
 

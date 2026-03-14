@@ -75,3 +75,58 @@ exports.getAdminDashboard = async (req, res) => {
   }
 };
 
+exports.getAuditLogs = async (req, res) => {
+  try {
+    const { AuditLog } = req.models;
+    const {
+      page = 1,
+      limit = 50,
+      action,
+      actorUserId,
+      targetId,
+      status,
+      from,
+      to,
+    } = req.query;
+
+    const parsedPage = Math.max(1, Number(page) || 1);
+    const parsedLimit = Math.min(200, Math.max(1, Number(limit) || 50));
+
+    const query = {};
+    if (action) query.action = action;
+    if (status) query.status = status;
+    if (actorUserId && mongoose.Types.ObjectId.isValid(actorUserId)) {
+      query['actor.userId'] = new mongoose.Types.ObjectId(actorUserId);
+    }
+    if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+      query['target.id'] = new mongoose.Types.ObjectId(targetId);
+    }
+    if (from || to) {
+      query.timestamp = {};
+      if (from) query.timestamp.$gte = new Date(from);
+      if (to) query.timestamp.$lte = new Date(to);
+    }
+
+    const [logs, total] = await Promise.all([
+      AuditLog.find(query)
+        .sort({ timestamp: -1 })
+        .skip((parsedPage - 1) * parsedLimit)
+        .limit(parsedLimit)
+        .lean(),
+      AuditLog.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      page: parsedPage,
+      limit: parsedLimit,
+      total,
+      logs,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: 'Erro ao buscar logs de auditoria',
+      error: error.message,
+    });
+  }
+};
+

@@ -4,17 +4,22 @@ const moment = require('moment');
 const cloudinary = require('../config/cloudinaryConfig');
 const messages = require('../resources/messages');
 const getSchoolObject = require('../utils/getSchoolObject');
-const { buildPhoneCandidates, normalizePhoneNumber } = require('../utils/phoneNumber');
+const { buildPhoneLookupQuery, findUserByPhone, normalizePhoneNumber } = require('../utils/phoneNumber');
+const { writeAuditLog } = require('../utils/auditLog');
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+function normalizeString(value) {
+  if (value === undefined || value === null) return null;
+  return String(value).trim();
+}
 
 exports.loginUser = async (req, res) => {
   try {
     const { User } = req.models;
     const { phoneNumber, password } = req.body;
 
-    const phoneCandidates = buildPhoneCandidates(phoneNumber);
-    const user = await User.findOne({ phoneNumber: { $in: phoneCandidates } });
+    const user = await findUserByPhone(User, phoneNumber);
     if (!user) {
       return res.status(400).json({ message: messages.pt.phoneNumberNotFound });
     }
@@ -56,12 +61,11 @@ exports.registerUser = async (req, res) => {
     }
 
     // Check if a user with the same email or phone number already exists
-    const phoneCandidates = buildPhoneCandidates(phoneNumber);
     const existingUser = await User.findOne({
       $or: [
         { email },
         ...(cpf ? [{ cpf }] : []),
-        { phoneNumber: { $in: phoneCandidates } },
+        buildPhoneLookupQuery(phoneNumber),
       ],
     });
 
@@ -100,6 +104,21 @@ exports.registerUser = async (req, res) => {
     // Commit the transaction
     await session.commitTransaction();
     session.endSession();
+
+    await writeAuditLog(req, {
+      action: 'user.create',
+      target: { type: 'user', id: newUser._id },
+      changes: {
+        fullName: { from: null, to: newUser.fullName },
+        email: { from: null, to: newUser.email },
+        role: { from: null, to: newUser.role },
+        isAdmin: { from: null, to: newUser.isAdmin },
+      },
+      metadata: {
+        source: req.user?.id ? 'admin' : 'self-register',
+      },
+      status: 'success',
+    });
     
     const token = jwt.sign({ id: newUser._id, role: newUser.role, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
 
@@ -108,6 +127,17 @@ exports.registerUser = async (req, res) => {
     // Abort the transaction in case of error
     await session.abortTransaction();
     session.endSession();
+    await writeAuditLog(req, {
+      action: 'user.create',
+      target: { type: 'user' },
+      metadata: {
+        attemptedEmail: req.body?.email || null,
+        attemptedPhone: req.body?.phoneNumber || null,
+        source: req.user?.id ? 'admin' : 'self-register',
+      },
+      status: 'failure',
+      errorMessage: error.message,
+    });
     res.status(500).json({ message: messages.pt.registrationError, error: error.message });
   }
 }
@@ -148,14 +178,13 @@ exports.requestPasswordReset = async (req, res) => {
   try {
     const { User } = req.models;
     const { phoneNumber, birthday } = req.body;
-    const phoneCandidates = buildPhoneCandidates(phoneNumber);
 
     // Validate required fields
     if (!phoneNumber) {
       return res.status(400).json({ message: 'Número de telefone obrigatório.' });
     }
 
-    const user = await User.findOne({ phoneNumber: { $in: phoneCandidates } });
+    const user = await findUserByPhone(User, phoneNumber);
 
     if (!user) {
       return res.status(404).json({ message: messages.pt.phoneNumberNotFound });
@@ -196,11 +225,10 @@ exports.resetPassword = async (req, res) => {
   try {
     const { User } = req.models;
     const { phoneNumber, verificationCode, newPassword } = req.body;
-    const phoneCandidates = buildPhoneCandidates(phoneNumber);
 
     // find the user with the reset token and check if it has expired, only use twillo verification code when you want to test the logic.
     const user = await User.findOne({
-      phoneNumber: { $in: phoneCandidates },
+      ...buildPhoneLookupQuery(phoneNumber),
       resetToken: verificationCode,
       resetTokenExpiration: { $gt: Date.now() }
     });
@@ -383,6 +411,19 @@ exports.editUserInfo = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const previousValues = {
+      fullName: normalizeString(user.fullName),
+      email: normalizeString(user.email),
+      phoneNumber: normalizeString(user.phoneNumber),
+      cpf: normalizeString(user.cpf),
+      birthday: user.birthday ? new Date(user.birthday).toISOString() : null,
+      role: normalizeString(user.role),
+      isAdmin: Boolean(user.isAdmin),
+      status: user.studentProfile?.status || null,
+      totalCredits: user.studentProfile?.totalCredits ?? null,
+      usedCredits: user.studentProfile?.usedCredits ?? null,
+    };
+
     // Update basic user fields
     if (typeof fullName === 'string') user.fullName = fullName.trim();
     if (typeof email === 'string') user.email = email.trim();
@@ -435,8 +476,44 @@ exports.editUserInfo = async (req, res) => {
     // Save the updated user
     await user.save();
 
+    const nextValues = {
+      fullName: normalizeString(user.fullName),
+      email: normalizeString(user.email),
+      phoneNumber: normalizeString(user.phoneNumber),
+      cpf: normalizeString(user.cpf),
+      birthday: user.birthday ? new Date(user.birthday).toISOString() : null,
+      role: normalizeString(user.role),
+      isAdmin: Boolean(user.isAdmin),
+      status: user.studentProfile?.status || null,
+      totalCredits: user.studentProfile?.totalCredits ?? null,
+      usedCredits: user.studentProfile?.usedCredits ?? null,
+    };
+
+    const changes = {};
+    for (const key of Object.keys(previousValues)) {
+      if (previousValues[key] !== nextValues[key]) {
+        changes[key] = { from: previousValues[key], to: nextValues[key] };
+      }
+    }
+
+    await writeAuditLog(req, {
+      action: 'user.update',
+      target: { type: 'user', id: user._id },
+      changes,
+      status: 'success',
+    });
+
     res.status(200).json({ message: 'User information updated successfully', user });
   } catch (error) {
+    await writeAuditLog(req, {
+      action: 'user.update',
+      target: { type: 'user', id: req.params?.userId || null },
+      metadata: {
+        attemptedPayload: req.body,
+      },
+      status: 'failure',
+      errorMessage: error.message,
+    });
     console.error('Error updating user information:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
@@ -454,6 +531,15 @@ exports.assignContractToStudent = async (req, res) => {
     if (!user || !user.studentProfile) {
       return res.status(404).json({ message: 'User or student profile not found' });
     }
+
+    const previousContractState = {
+      contractId: user.studentProfile.contract?.toString() || null,
+      totalCredits: user.studentProfile.totalCredits ?? null,
+      usedCredits: user.studentProfile.usedCredits ?? null,
+      contractExpiration: user.studentProfile.contractExpiration
+        ? new Date(user.studentProfile.contractExpiration).toISOString()
+        : null,
+    };
 
     const school = await getSchoolObject(req.models);
 
@@ -473,8 +559,38 @@ exports.assignContractToStudent = async (req, res) => {
     user.studentProfile.contractExpiration = contractExpiration;
     await user.studentProfile.save();
 
+    await writeAuditLog(req, {
+      action: 'student.contract.assign',
+      target: { type: 'studentProfile', id: user.studentProfile._id },
+      changes: {
+        contractType: { from: previousContractState.contractId, to: contract.type },
+        totalCredits: { from: previousContractState.totalCredits, to: user.studentProfile.totalCredits },
+        usedCredits: { from: previousContractState.usedCredits, to: user.studentProfile.usedCredits },
+        contractExpiration: {
+          from: previousContractState.contractExpiration,
+          to: user.studentProfile.contractExpiration
+            ? new Date(user.studentProfile.contractExpiration).toISOString()
+            : null,
+        },
+      },
+      metadata: {
+        userId: user._id,
+      },
+      status: 'success',
+    });
+
     res.status(200).json({ message: 'Contract assigned successfully', studentProfile: user.studentProfile });
   } catch (error) {
+    await writeAuditLog(req, {
+      action: 'student.contract.assign',
+      target: { type: 'studentProfile', id: null },
+      metadata: {
+        userId: req.params?.userId || null,
+        contractType: req.body?.contractType || null,
+      },
+      status: 'failure',
+      errorMessage: error.message,
+    });
     console.error('Error assigning contract:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
