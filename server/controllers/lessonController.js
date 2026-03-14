@@ -237,7 +237,7 @@ exports.bookLesson = async (req, res) => {
     // Retrieve the user's profile with the studentProfile populated
     const user = await User.findById(studentId).populate('studentProfile').session(session);
     if (!user) {
-      return res.status(404).json({ message: 'Usuario não encontrado' });
+      return res.status(404).json({ message: 'Usuário não encontrado' });
     }
 
     // Garante perfil de aluno para contas antigas/inconsistentes.
@@ -318,7 +318,7 @@ exports.cancelBooking = async (req, res) => {
     // Update the student's lesson history and lesson counts
     const user = await User.findById(studentId).populate('studentProfile').session(session);
     if (!user) {
-      return res.status(404).json({ message: 'Usuario não encontrado' });
+      return res.status(404).json({ message: 'Usuário não encontrado' });
     }
 
     // Garante perfil de aluno para contas antigas/inconsistentes.

@@ -8,7 +8,7 @@ exports.assignInstructorRole = async (req, res) => {
     const user = await User.findById(instructorId);
 
     if (!user) {
-      return res.status(404).json({ message: "Usuario não encontrado" });
+      return res.status(404).json({ message: "Usuário não encontrado" });
     }
 
     // Assign the instructor role
@@ -34,7 +34,7 @@ exports.assignInstructorRole = async (req, res) => {
     await user.save();
 
     res.status(201).json({
-      message: "Perfil de professor criado e papel atribuido com sucesso",
+      message: "Perfil de professor criado e papel atribuído com sucesso",
       user,
       instructorProfile,
     });
@@ -86,7 +86,7 @@ exports.getPublicInstructors = async (req, res) => {
     ).lean();
     res.status(200).json(instructors);
   } catch (error) {
-    console.error("Erro ao buscar professores (publico):", error);
+    console.error("Erro ao buscar professores (público):", error);
     res.status(500).json({ message: "Erro interno do servidor", error: error.message });
   }
 };
@@ -99,7 +99,7 @@ exports.removeInstructorRole = async (req, res) => {
 
     const user = await User.findById(instructorId);
     if (!user) {
-      return res.status(404).json({ message: "Usuario não encontrado" });
+      return res.status(404).json({ message: "Usuário não encontrado" });
     }
 
     const instructorProfile = await InstructorProfile.findOneAndDelete({
