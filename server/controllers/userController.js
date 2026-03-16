@@ -8,10 +8,39 @@ const { buildPhoneLookupQuery, findUserByPhone, normalizePhoneNumber } = require
 const { writeAuditLog } = require('../utils/auditLog');
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const ROOT_ADMIN_PHONE =
+  normalizePhoneNumber(process.env.ROOT_ADMIN_PHONE || '85997184031') || null;
 
 function normalizeString(value) {
   if (value === undefined || value === null) return null;
   return String(value).trim();
+}
+
+function isProtectedRootUser(user) {
+  if (!user) return false;
+  if (user.owner) return true;
+  if (!ROOT_ADMIN_PHONE) return false;
+
+  const normalizedPhone = normalizePhoneNumber(user.phoneNumber);
+  return Boolean(normalizedPhone && normalizedPhone === ROOT_ADMIN_PHONE);
+}
+
+function decorateProtectedUser(user) {
+  if (!user) return user;
+
+  if (typeof user.toObject === 'function') {
+    const userObject = user.toObject();
+    if (isProtectedRootUser(userObject)) {
+      userObject.owner = true;
+    }
+    return userObject;
+  }
+
+  if (isProtectedRootUser(user)) {
+    return { ...user, owner: true };
+  }
+
+  return user;
 }
 
 exports.loginUser = async (req, res) => {
@@ -31,7 +60,7 @@ exports.loginUser = async (req, res) => {
 
     const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '15d' });
 
-    const { password: _, ...userWithoutPassword } = user.toObject();
+    const { password: _, ...userWithoutPassword } = decorateProtectedUser(user);
 
     res.status(200).json({
       message: messages.pt.loginSuccess,
@@ -146,7 +175,7 @@ exports.getUsers = async (req, res) => {
   try {
     const { User } = req.models;
     const users = await User.find().populate('studentProfile');
-    res.status(200).json(users);
+    res.status(200).json(users.map((user) => decorateProtectedUser(user)));
   } catch (error) {
     res.status(500).json({ message: messages.pt.fetchUsersError,  error: error.message });
   }
@@ -291,7 +320,7 @@ exports.getAuthenticatedUserData = async (req, res) => {
       students: userId,
     });
 
-    res.status(200).json({ user, lessons });
+    res.status(200).json({ user: decorateProtectedUser(user), lessons });
   } catch (error) {
     console.error('Error retrieving user data:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
@@ -308,6 +337,12 @@ exports.updateAuthenticatedUserData = async (req, res) => {
     const user = await User.findById(userId).populate('studentProfile');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (isProtectedRootUser(user)) {
+      return res.status(403).json({
+        message: 'O admin root não pode ser editado por esta tela.',
+      });
     }
 
     if (typeof fullName === 'string') user.fullName = fullName.trim();
@@ -332,7 +367,7 @@ exports.updateAuthenticatedUserData = async (req, res) => {
 
     await user.save();
 
-    const userObject = user.toObject();
+    const userObject = decorateProtectedUser(user);
     delete userObject.password;
 
     return res.status(200).json({
@@ -516,6 +551,118 @@ exports.editUserInfo = async (req, res) => {
     });
     console.error('Error updating user information:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+exports.deleteStudentByPhone = async (req, res) => {
+  const { User, StudentProfile, Lesson, School } = req.models;
+  const session = await User.db.startSession();
+  session.startTransaction();
+
+  try {
+    const rawPhoneNumber = req.params?.phoneNumber || req.body?.phoneNumber;
+    const normalizedPhoneNumber = normalizePhoneNumber(rawPhoneNumber);
+
+    if (!normalizedPhoneNumber) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: 'Número de telefone inválido.' });
+    }
+
+    const matchedUser = await findUserByPhone(User, normalizedPhoneNumber);
+    if (!matchedUser) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: messages.pt.phoneNumberNotFound });
+    }
+
+    const user = await User.findById(matchedUser._id)
+      .populate('studentProfile')
+      .session(session);
+
+    if (!user) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+
+    if (isProtectedRootUser(user)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({
+        message: 'O admin root não pode ser removido.',
+      });
+    }
+
+    if (user.isAdmin || user.role !== 'student') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        message: 'Este endpoint remove apenas alunos.',
+      });
+    }
+
+    await Lesson.updateMany(
+      { students: user._id },
+      { $pull: { students: user._id } },
+      { session },
+    );
+
+    await School.updateMany(
+      { users: user._id },
+      { $pull: { users: user._id } },
+      { session },
+    );
+
+    if (user.studentProfile?._id) {
+      await StudentProfile.deleteOne({ _id: user.studentProfile._id }).session(
+        session,
+      );
+    }
+
+    await User.deleteOne({ _id: user._id }).session(session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    await writeAuditLog(req, {
+      action: 'user.delete',
+      target: { type: 'user', id: user._id },
+      changes: {
+        fullName: { from: user.fullName, to: null },
+        phoneNumber: { from: user.phoneNumber, to: null },
+        studentProfile: {
+          from: user.studentProfile?._id?.toString() || null,
+          to: null,
+        },
+      },
+      status: 'success',
+    });
+
+    return res.status(200).json({
+      message: 'Aluno removido com sucesso.',
+      deletedUserId: user._id,
+      deletedPhoneNumber: user.phoneNumber,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    await writeAuditLog(req, {
+      action: 'user.delete',
+      target: { type: 'user', id: null },
+      metadata: {
+        attemptedPhone: req.params?.phoneNumber || req.body?.phoneNumber || null,
+      },
+      status: 'failure',
+      errorMessage: error.message,
+    });
+
+    console.error('Error deleting student by phone:', error);
+    return res.status(500).json({
+      message: 'Erro interno do servidor',
+      error: error.message,
+    });
   }
 };
 

@@ -16,6 +16,7 @@ const {
     updateAuthenticatedUserData,
     changeAuthenticatedUserPassword,
     editUserInfo,
+    deleteStudentByPhone,
     getActiveNonExperimentalContracts,
     countActiveNonExperimentalContracts
 } = require('../controllers/userController');
@@ -78,6 +79,9 @@ router.get('/', validateToken, requireAdmin, getUsers);
 
 // Edit user information (admin-only route)
 router.put('/:userId', validateToken, requireAdmin, editUserInfo);
+
+// Delete student by phone (admin-only route)
+router.delete('/by-phone/:phoneNumber', validateToken, requireAdmin, deleteStudentByPhone);
 
 // Assign contract to student (admin-only route)
 router.patch('/:userId/assign-contract', validateToken, requireAdmin, assignContractToStudent);
