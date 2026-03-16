@@ -1,5 +1,8 @@
 ﻿const mongoose = require('mongoose');
 
+const escapeRegex = (value = '') =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 exports.getAdminDashboard = async (req, res) => {
   try {
     const { User, StudentProfile, Lesson } = req.models;
@@ -77,13 +80,15 @@ exports.getAdminDashboard = async (req, res) => {
 
 exports.getAuditLogs = async (req, res) => {
   try {
-    const { AuditLog } = req.models;
+    const { AuditLog, User } = req.models;
     const {
       page = 1,
       limit = 50,
       action,
       actorUserId,
+      userId,
       targetId,
+      userName,
       status,
       from,
       to,
@@ -98,13 +103,96 @@ exports.getAuditLogs = async (req, res) => {
     if (actorUserId && mongoose.Types.ObjectId.isValid(actorUserId)) {
       query['actor.userId'] = new mongoose.Types.ObjectId(actorUserId);
     }
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      const selectedUser = await User.findById(userId)
+        .select('_id studentProfile instructorProfile')
+        .lean();
+
+      if (!selectedUser?._id) {
+        return res.status(200).json({
+          page: parsedPage,
+          limit: parsedLimit,
+          total: 0,
+          logs: [],
+        });
+      }
+
+      const relatedIds = [
+        selectedUser._id,
+        selectedUser.studentProfile,
+        selectedUser.instructorProfile,
+      ]
+        .filter(Boolean)
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      query.$or = [
+        { 'target.id': { $in: relatedIds } },
+        { 'metadata.userId': new mongoose.Types.ObjectId(selectedUser._id) },
+      ];
+    }
     if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
       query['target.id'] = new mongoose.Types.ObjectId(targetId);
     }
     if (from || to) {
       query.timestamp = {};
-      if (from) query.timestamp.$gte = new Date(from);
-      if (to) query.timestamp.$lte = new Date(to);
+      if (from) {
+        const startDate = new Date(from);
+        if (!Number.isNaN(startDate.getTime())) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(String(from))) {
+            startDate.setHours(0, 0, 0, 0);
+          }
+          query.timestamp.$gte = startDate;
+        }
+      }
+      if (to) {
+        const endDate = new Date(to);
+        if (!Number.isNaN(endDate.getTime())) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(String(to))) {
+            endDate.setHours(23, 59, 59, 999);
+          }
+          query.timestamp.$lte = endDate;
+        }
+      }
+    }
+
+    if (!query.$or && userName && String(userName).trim()) {
+      const matchedUsers = await User.find({
+        fullName: {
+          $regex: escapeRegex(String(userName).trim()),
+          $options: 'i',
+        },
+      })
+        .select('_id studentProfile instructorProfile')
+        .lean();
+
+      const userIds = matchedUsers
+        .map((user) => user?._id)
+        .filter(Boolean)
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      const profileIds = matchedUsers
+        .flatMap((user) => [user?.studentProfile, user?.instructorProfile])
+        .filter(Boolean)
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      if (!userIds.length && !profileIds.length) {
+        return res.status(200).json({
+          page: parsedPage,
+          limit: parsedLimit,
+          total: 0,
+          logs: [],
+        });
+      }
+
+      query.$or = [
+        ...(userIds.length
+          ? [
+              { 'target.id': { $in: userIds } },
+              { 'metadata.userId': { $in: userIds } },
+            ]
+          : []),
+        ...(profileIds.length ? [{ 'target.id': { $in: profileIds } }] : []),
+      ];
     }
 
     const [logs, total] = await Promise.all([
