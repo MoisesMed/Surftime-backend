@@ -36,7 +36,6 @@ async function upsertRegistrySchool({ baseUri, name, subdomain, logoUrl }) {
   );
 }
 
-
 exports.createSchool = async (req, res) => {
   try {
     const { School } = req.models;
@@ -130,7 +129,6 @@ exports.updateSchool = async (req, res) => {
   try {
     const { School } = req.models;
     const school = await getSchoolObject(req.models);
-    const schoolId = school._id;
 
     const updateData = req.body;
 
@@ -168,12 +166,21 @@ exports.updateSchool = async (req, res) => {
       updateData['settings.logoUrls'] = logoUrls; // Save the array of logo URLs
     }
 
-    // Update the school's profile with the logo URL
-    const updatedSchool = await School.findByIdAndUpdate(
-      schoolId,
-      updateData,
-      { new: true }
-    );
+    if (Array.isArray(updateData['settings.templateTimes'])) {
+      updateData['settings.templateTimes'] = updateData['settings.templateTimes']
+        .filter((time) => time?.startTime && time?.endTime)
+        .map((time) => ({
+          startTime: new Date(time.startTime),
+          endTime: new Date(time.endTime),
+        }));
+    }
+
+    Object.entries(updateData).forEach(([key, value]) => {
+      school.set(key, value);
+    });
+
+    await school.save();
+    const updatedSchool = await School.findById(school._id);
     
     // Check if the school was updated
     if (!updatedSchool) {
@@ -228,7 +235,7 @@ exports.getDefaultData = async (req, res) => {
 
     const { timeZone } = school.settings;
 
-    // Define the default lesson times (example times)
+    // Default fallback lesson times when the school has not customized its template yet.
     const defaultLessonTimes = [
       { startHour: 6, endHour: 7 },
       { startHour: 7, endHour: 8 },
@@ -241,11 +248,20 @@ exports.getDefaultData = async (req, res) => {
 
     // Generate the lesson times for a specific date
     const date = moment().format('YYYY-MM-DD'); // today date
-    const times = defaultLessonTimes.map(({ startHour, endHour }) => {
-      const startTime = moment.tz(`${date} ${startHour}:00`, 'YYYY-MM-DD HH:mm', timeZone).toISOString();
-      const endTime = moment.tz(`${date} ${endHour}:00`, 'YYYY-MM-DD HH:mm', timeZone).toISOString();
-      return { startTime, endTime };
-    });
+    const storedTemplateTimes = Array.isArray(school.settings?.templateTimes)
+      ? school.settings.templateTimes
+      : [];
+
+    const times = storedTemplateTimes.length > 0
+      ? storedTemplateTimes.map((time) => ({
+          startTime: time.startTime,
+          endTime: time.endTime,
+        }))
+      : defaultLessonTimes.map(({ startHour, endHour }) => {
+          const startTime = moment.tz(`${date} ${startHour}:00`, 'YYYY-MM-DD HH:mm', timeZone).toISOString();
+          const endTime = moment.tz(`${date} ${endHour}:00`, 'YYYY-MM-DD HH:mm', timeZone).toISOString();
+          return { startTime, endTime };
+        });
 
     const allInstructors = school.users.filter(user => user.role === 'instructor');
     const templateInstructorIds = (school.settings?.templateInstructorIds || []).map((id) => id.toString());

@@ -3,6 +3,7 @@ const messages = require('../resources/messages');
 const moment = require('moment-timezone');
 const { calculateRemainingCredits } = require('../utils/creditsUtils');
 const webPush = require('web-push');
+const mongoose = require('mongoose');
 
 // Function to send a notification to a user
 async function sendNotification(userId, payload) {
@@ -19,6 +20,56 @@ async function sendNotification(userId, payload) {
   } catch (error) {
     console.error('Error sending notification:', error);
   }
+}
+
+function hasOverlappingWindow(existingStart, existingEnd, nextStart, nextEnd) {
+  return existingStart < nextEnd && existingEnd > nextStart;
+}
+
+async function ensureNoLessonConflicts({
+  Lesson,
+  schoolId,
+  lessonsToCheck,
+  ignoreLessonId = null,
+}) {
+  for (let index = 0; index < lessonsToCheck.length; index += 1) {
+    const current = lessonsToCheck[index];
+
+    for (let compareIndex = index + 1; compareIndex < lessonsToCheck.length; compareIndex += 1) {
+      const compare = lessonsToCheck[compareIndex];
+      if (
+        hasOverlappingWindow(
+          current.startTime.toDate ? current.startTime.toDate() : current.startTime,
+          current.endTime.toDate ? current.endTime.toDate() : current.endTime,
+          compare.startTime.toDate ? compare.startTime.toDate() : compare.startTime,
+          compare.endTime.toDate ? compare.endTime.toDate() : compare.endTime,
+        )
+      ) {
+        return 'Não é possível criar duas aulas no mesmo horário.';
+      }
+    }
+
+    const query = {
+      school: schoolId,
+      startTime: {
+        $lt: current.endTime.toDate ? current.endTime.toDate() : current.endTime,
+      },
+      endTime: {
+        $gt: current.startTime.toDate ? current.startTime.toDate() : current.startTime,
+      },
+    };
+
+    if (ignoreLessonId && mongoose.Types.ObjectId.isValid(ignoreLessonId)) {
+      query._id = { $ne: new mongoose.Types.ObjectId(ignoreLessonId) };
+    }
+
+    const existingLesson = await Lesson.findOne(query).lean();
+    if (existingLesson) {
+      return 'Já existe uma aula cadastrada nesse horário.';
+    }
+  }
+
+  return null;
 }
 
 // Get all lessons by date
@@ -449,6 +500,14 @@ exports.createLessonsForDay = async (req, res) => {
       lessons.push(newLesson);
     }
 
+    const conflictMessage = await ensureNoLessonConflicts({
+      Lesson,
+      schoolId,
+      lessonsToCheck: lessons,
+    });
+    if (conflictMessage) {
+      return res.status(400).json({ message: conflictMessage });
+    }
 
     // Save all lessons to the database
     await Lesson.insertMany(lessons);
@@ -475,6 +534,7 @@ exports.createLesson = async (req, res) => {
 
     // Process each lesson in the array
     const createdLessons = [];
+      const lessonsToCreate = [];
       for (const lessonData of lessons) {
         const {startTime, endTime, location, studentLimit , instructors} = lessonData;
           
@@ -494,8 +554,7 @@ exports.createLesson = async (req, res) => {
           lessonEndTime = lessonStartTime.clone().add(lessonDuration, 'minutes');
         }
 
-        // Create a new lesson
-        const newLesson = new Lesson({
+        lessonsToCreate.push({
           startTime: lessonStartTime,
           endTime: lessonEndTime,
           location,
@@ -503,11 +562,22 @@ exports.createLesson = async (req, res) => {
           school: schoolId,
           instructors: instructors || []
         });
-
-        // Save the lesson to the database
-        await newLesson.save();
-        createdLessons.push(newLesson);
       }
+
+    const conflictMessage = await ensureNoLessonConflicts({
+      Lesson,
+      schoolId,
+      lessonsToCheck: lessonsToCreate,
+    });
+    if (conflictMessage) {
+      return res.status(400).json({ message: conflictMessage });
+    }
+
+    for (const lessonToCreate of lessonsToCreate) {
+      const newLesson = new Lesson(lessonToCreate);
+      await newLesson.save();
+      createdLessons.push(newLesson);
+    }
     res.status(201).json({ message: 'Aula criada com sucesso', lesson: createdLessons });
   } catch (error) {
     res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
@@ -519,6 +589,36 @@ exports.editLesson = async (req, res) => {
     const { Lesson } = req.models;
     const { lessonId } = req.params;
     const updateData = req.body; // Get update data from request body
+
+    const school = await getSchoolObject(req.models);
+    const schoolId = school._id;
+
+    const currentLesson = await Lesson.findById(lessonId);
+    if (!currentLesson) {
+      return res.status(404).json({ message: 'Aula não encontrada' });
+    }
+
+    const nextStartTime = updateData.startTime
+      ? moment.tz(`${updateData.startTime}`, school.settings.timeZone)
+      : moment(currentLesson.startTime);
+    const nextEndTime = updateData.endTime
+      ? moment.tz(`${updateData.endTime}`, school.settings.timeZone)
+      : moment(currentLesson.endTime);
+
+    const conflictMessage = await ensureNoLessonConflicts({
+      Lesson,
+      schoolId,
+      lessonsToCheck: [
+        {
+          startTime: nextStartTime,
+          endTime: nextEndTime,
+        },
+      ],
+      ignoreLessonId: lessonId,
+    });
+    if (conflictMessage) {
+      return res.status(400).json({ message: conflictMessage });
+    }
 
     // Find the lesson by ID and update it
     const updatedLesson = await Lesson.findByIdAndUpdate(lessonId, updateData, { new: true });

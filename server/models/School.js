@@ -13,6 +13,13 @@ const settingsSchema = new mongoose.Schema({
   cancellationPolicy: { type: Number, default: 12 }, // In hours
   bookingWindow: { type: Number, default: 8 }, // Hours before a lesson that a user can book
   numberOfStudentsPerLesson: { type: Number, default: 2 }, // Default number of students per class
+  templateTimes: [
+    {
+      _id: false,
+      startTime: { type: Date, required: true },
+      endTime: { type: Date, required: true },
+    },
+  ],
   templateInstructorIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   contracts: [contractSchema], // Array of embedded contract schemas
 });
