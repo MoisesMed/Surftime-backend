@@ -29,7 +29,7 @@ exports.loginUser = async (req, res) => {
       return res.status(400).json({ message: messages.pt.invalidPassword });
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '15d' });
 
     const { password: _, ...userWithoutPassword } = user.toObject();
 
@@ -120,7 +120,7 @@ exports.registerUser = async (req, res) => {
       status: 'success',
     });
     
-    const token = jwt.sign({ id: newUser._id, role: newUser.role, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: newUser._id, role: newUser.role, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: '15d' });
 
     res.status(201).json({ message: messages.pt.registrationSuccess, token, user: newUser });
   } catch (error) {
