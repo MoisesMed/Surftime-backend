@@ -26,6 +26,131 @@ function hasOverlappingWindow(existingStart, existingEnd, nextStart, nextEnd) {
   return existingStart < nextEnd && existingEnd > nextStart;
 }
 
+function normalizeIdList(items = []) {
+  return [...new Set(items.filter(Boolean).map((item) => item.toString()))];
+}
+
+async function ensureStudentProfileForUser({
+  User,
+  StudentProfile,
+  userId,
+  session,
+}) {
+  const user = await User.findById(userId).populate('studentProfile').session(session);
+  if (!user) return null;
+
+  if (user.studentProfile) {
+    return user.studentProfile;
+  }
+
+  const createdProfiles = await StudentProfile.create([{ user: user._id }], { session });
+  const studentProfile = createdProfiles[0];
+  user.studentProfile = studentProfile._id;
+  await user.save({ session });
+
+  return studentProfile;
+}
+
+async function syncStudentCreditsForLessonChange({
+  User,
+  StudentProfile,
+  lessonId,
+  previousStudentIds = [],
+  nextStudentIds = [],
+  session,
+}) {
+  const previousIds = normalizeIdList(previousStudentIds);
+  const nextIds = normalizeIdList(nextStudentIds);
+  const previousSet = new Set(previousIds);
+  const nextSet = new Set(nextIds);
+
+  const removedStudentIds = previousIds.filter((id) => !nextSet.has(id));
+  const addedStudentIds = nextIds.filter((id) => !previousSet.has(id));
+
+  for (const studentId of removedStudentIds) {
+    const studentProfile = await ensureStudentProfileForUser({
+      User,
+      StudentProfile,
+      userId: studentId,
+      session,
+    });
+
+    if (!studentProfile) continue;
+
+    const hadLessonInHistory = (studentProfile.lessonHistory || []).some(
+      (entry) => entry.toString() === lessonId.toString(),
+    );
+
+    if (!hadLessonInHistory) continue;
+
+    studentProfile.lessonHistory = (studentProfile.lessonHistory || []).filter(
+      (entry) => entry.toString() !== lessonId.toString(),
+    );
+    studentProfile.usedCredits = Math.max(0, Number(studentProfile.usedCredits || 0) - 1);
+    await studentProfile.save({ session });
+  }
+
+  for (const studentId of addedStudentIds) {
+    const studentProfile = await ensureStudentProfileForUser({
+      User,
+      StudentProfile,
+      userId: studentId,
+      session,
+    });
+
+    if (!studentProfile) continue;
+
+    const alreadyRegistered = (studentProfile.lessonHistory || []).some(
+      (entry) => entry.toString() === lessonId.toString(),
+    );
+
+    if (alreadyRegistered) continue;
+
+    studentProfile.lessonHistory.push(lessonId);
+    studentProfile.usedCredits = Number(studentProfile.usedCredits || 0) + 1;
+    await studentProfile.save({ session });
+  }
+}
+
+async function cleanupStaleLessonReferences({
+  Lesson,
+  studentProfile,
+  studentId,
+  session,
+}) {
+  const lessonHistoryIds = normalizeIdList(studentProfile.lessonHistory || []);
+  if (!lessonHistoryIds.length) {
+    return studentProfile;
+  }
+
+  const validLessons = await Lesson.find({
+    _id: { $in: lessonHistoryIds },
+    students: studentId,
+  })
+    .select('_id')
+    .session(session);
+
+  const validLessonIds = new Set(
+    validLessons.map((lesson) => lesson._id.toString()),
+  );
+
+  const staleLessonIds = lessonHistoryIds.filter((id) => !validLessonIds.has(id));
+  if (!staleLessonIds.length) {
+    return studentProfile;
+  }
+
+  studentProfile.lessonHistory = (studentProfile.lessonHistory || []).filter(
+    (entry) => !staleLessonIds.includes(entry.toString()),
+  );
+  studentProfile.usedCredits = Math.max(
+    0,
+    Number(studentProfile.usedCredits || 0) - staleLessonIds.length,
+  );
+  await studentProfile.save({ session });
+
+  return studentProfile;
+}
+
 async function ensureNoLessonConflicts({
   Lesson,
   schoolId,
@@ -299,6 +424,13 @@ exports.bookLesson = async (req, res) => {
       user.studentProfile = studentProfile._id;
       await user.save({ session });
     }
+
+    studentProfile = await cleanupStaleLessonReferences({
+      Lesson,
+      studentProfile,
+      studentId,
+      session,
+    });
 
     // Calculate remaining credits
     const remainingCredits = calculateRemainingCredits(studentProfile);
@@ -585,16 +717,20 @@ exports.createLesson = async (req, res) => {
 }
 
 exports.editLesson = async (req, res) => {
+  const session = await req.models.Lesson.db.startSession();
+  session.startTransaction();
   try {
-    const { Lesson } = req.models;
+    const { Lesson, User, StudentProfile } = req.models;
     const { lessonId } = req.params;
     const updateData = req.body; // Get update data from request body
 
     const school = await getSchoolObject(req.models);
     const schoolId = school._id;
 
-    const currentLesson = await Lesson.findById(lessonId);
+    const currentLesson = await Lesson.findById(lessonId).session(session);
     if (!currentLesson) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: 'Aula não encontrada' });
     }
 
@@ -617,18 +753,44 @@ exports.editLesson = async (req, res) => {
       ignoreLessonId: lessonId,
     });
     if (conflictMessage) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: conflictMessage });
     }
 
     // Find the lesson by ID and update it
-    const updatedLesson = await Lesson.findByIdAndUpdate(lessonId, updateData, { new: true });
+    const previousStudentIds = currentLesson.students || [];
+    const nextStudentIds =
+      updateData.students !== undefined ? updateData.students : previousStudentIds;
+
+    const updatedLesson = await Lesson.findByIdAndUpdate(
+      lessonId,
+      updateData,
+      { new: true, session },
+    );
 
     if (!updatedLesson) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: 'Aula não encontrada' });
     }
 
+    await syncStudentCreditsForLessonChange({
+      User,
+      StudentProfile,
+      lessonId: updatedLesson._id,
+      previousStudentIds,
+      nextStudentIds,
+      session,
+    });
+
+    await session.commitTransaction();
+    session.endSession();
+
     res.status(200).json({ message: 'Aula atualizada com sucesso', lesson: updatedLesson });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error updating lesson:', error);
     res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }
@@ -682,17 +844,42 @@ exports.getTodaysLessonsByStudent = async (req, res) => {
 
 // Delete lesson (admin-only)
 exports.deleteLesson = async (req, res) => {
+  const session = await req.models.Lesson.db.startSession();
+  session.startTransaction();
   try {
-    const { Lesson } = req.models;
+    const { Lesson, User, StudentProfile } = req.models;
     const { lessonId } = req.params;
 
-    const deletedLesson = await Lesson.findByIdAndDelete(lessonId);
-    if (!deletedLesson) {
+    const lesson = await Lesson.findById(lessonId).session(session);
+    if (!lesson) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: 'Aula não encontrada' });
     }
 
+    await syncStudentCreditsForLessonChange({
+      User,
+      StudentProfile,
+      lessonId: lesson._id,
+      previousStudentIds: lesson.students || [],
+      nextStudentIds: [],
+      session,
+    });
+
+    const deletedLesson = await Lesson.findByIdAndDelete(lessonId).session(session);
+    if (!deletedLesson) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Aula não encontrada' });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
     res.status(200).json({ message: 'Aula removida com sucesso' });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error deleting lesson:', error);
     res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
   }

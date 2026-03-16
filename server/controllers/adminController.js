@@ -7,16 +7,18 @@ exports.getAdminDashboard = async (req, res) => {
   try {
     const { User, StudentProfile, Lesson } = req.models;
     const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
 
-    const totalStudentsPromise = User.countDocuments({ role: 'student' });
+    const totalStudentsPromise = User.countDocuments({
+      role: 'student',
+      isAdmin: { $ne: true },
+    });
 
-    const activePlansPromise = StudentProfile.countDocuments({
-      contract: { $ne: null },
-      $or: [
-        { contractExpiration: { $exists: false } },
-        { contractExpiration: null },
-        { contractExpiration: { $gte: now } },
-      ],
+    const studentsWithPendingLessonsPromise = Lesson.distinct('students', {
+      endTime: { $gte: now },
     });
 
     const trialStudentsPromise = StudentProfile.countDocuments({
@@ -26,6 +28,11 @@ exports.getAdminDashboard = async (req, res) => {
 
     const lessonsCompletedPromise = Lesson.countDocuments({
       endTime: { $lt: now },
+    });
+
+    const lessonsTodayPromise = Lesson.countDocuments({
+      startTime: { $gte: startOfDay, $lte: endOfDay },
+      'students.0': { $exists: true },
     });
 
     const ongoingLessons = await Lesson.find({
@@ -49,15 +56,43 @@ exports.getAdminDashboard = async (req, res) => {
 
     const [
       totalStudents,
-      activePlans,
+      studentsWithPendingLessons,
       trialStudents,
       lessonsCompleted,
+      lessonsToday,
     ] = await Promise.all([
       totalStudentsPromise,
-      activePlansPromise,
+      studentsWithPendingLessonsPromise,
       trialStudentsPromise,
       lessonsCompletedPromise,
+      lessonsTodayPromise,
     ]);
+
+    const activePlans = await StudentProfile.countDocuments({
+      status: 'active',
+      $or: [
+        {
+          $expr: {
+            $gt: [
+              { $ifNull: ['$totalCredits', 0] },
+              { $ifNull: ['$usedCredits', 0] },
+            ],
+          },
+        },
+        {
+          user: { $in: studentsWithPendingLessons },
+        },
+      ],
+      $and: [
+        {
+          $or: [
+            { contractExpiration: { $exists: false } },
+            { contractExpiration: null },
+            { contractExpiration: { $gte: now } },
+          ],
+        },
+      ],
+    });
 
     const studentsCompletedLessons =
       studentsCompletedLessonsAgg?.[0]?.count || 0;
@@ -67,6 +102,7 @@ exports.getAdminDashboard = async (req, res) => {
       activePlans,
       trialStudents,
       lessonsCompleted,
+      lessonsToday,
       studentsInLesson: studentsInLessonSet.size,
       studentsCompletedLessons,
     });
