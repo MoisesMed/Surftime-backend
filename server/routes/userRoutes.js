@@ -41,7 +41,7 @@ const router = express.Router();
 router.post('/register', [
     body('fullName').isLength({ min: 3 }),
     body('email').isEmail(),
-    body('password').isLength({ min: 8 }),
+    body('password').isLength({ min: 6 }),
     body('phoneNumber').notEmpty(),
     body('birthday').isISO8601(),
     body('cpf').optional({ checkFalsy: true }).isLength({ min: 11 }),

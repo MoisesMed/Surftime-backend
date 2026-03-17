@@ -390,8 +390,8 @@ exports.changeAuthenticatedUserPassword = async (req, res) => {
       return res.status(400).json({ message: 'Senha atual e nova senha são obrigatórias' });
     }
 
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ message: 'A nova senha deve ter ao menos 8 caracteres' });
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'A nova senha deve ter ao menos 6 caracteres' });
     }
 
     if (currentPassword === newPassword) {
